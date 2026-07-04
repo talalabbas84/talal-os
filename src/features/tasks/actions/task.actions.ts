@@ -112,7 +112,7 @@ export async function getTasks(
   });
 }
 
-export async function getTodayTasks() {
+export async function getTodayTasks(): Promise<TaskWithProject[]> {
   const userId = await requireUserId();
   const today = new Date();
   today.setHours(0, 0, 0, 0);

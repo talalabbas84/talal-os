@@ -4,10 +4,13 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { projectSchema } from "../lib/schema";
-import type { ActionResult, Project, ProjectStatus, Task } from "@/types";
-
-type ProjectWithTaskCount = Project & { _count: { tasks: number } };
-type ProjectWithTasks = Project & { tasks: Task[] };
+import type {
+  ActionResult,
+  Project,
+  ProjectStatus,
+  ProjectWithTaskCount,
+  ProjectWithTasks,
+} from "@/types";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();

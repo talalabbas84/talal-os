@@ -38,7 +38,7 @@ export async function upsertDailyLog(
   }
 }
 
-export async function getDailyLog(date: string) {
+export async function getDailyLog(date: string): Promise<DailyLog | null> {
   const userId = await requireUserId();
   const dateObj = new Date(date + "T00:00:00.000Z");
   return prisma.dailyLog.findUnique({
@@ -46,7 +46,7 @@ export async function getDailyLog(date: string) {
   });
 }
 
-export async function getRecentDailyLogs(limit = 7) {
+export async function getRecentDailyLogs(limit = 7): Promise<DailyLog[]> {
   const userId = await requireUserId();
   return prisma.dailyLog.findMany({
     where: { userId },
