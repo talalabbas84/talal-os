@@ -1,8 +1,10 @@
-import type { AIProvider, CaptureOutput } from "./types";
+import type { AIProvider, CaptureResult } from "./types";
 
-// Stub — implement when self-hosting Ollama locally
+// Stub — implement when self-hosting Ollama with OLLAMA_BASE_URL + OLLAMA_MODEL
 export const ollamaProvider: AIProvider = {
-  async processCapture(_text: string): Promise<CaptureOutput> {
-    throw new Error("Ollama provider not yet implemented. Set AI_PROVIDER=mock to use the mock provider.");
+  async organizeCapture(_input: string): Promise<CaptureResult> {
+    throw new Error(
+      "Ollama provider not yet implemented. Set AI_PROVIDER=mock or AI_PROVIDER=gemini.",
+    );
   },
 };

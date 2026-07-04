@@ -4,9 +4,9 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAIProvider } from "@/lib/ai/provider";
-import { captureOutputSchema } from "../lib/schema";
+import { saveCaptureSchema } from "../lib/schema";
 import type { ActionResult } from "@/types";
-import type { CaptureOutput } from "@/lib/ai/types";
+import type { CaptureResult } from "@/lib/ai/types";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -14,60 +14,71 @@ async function requireUserId(): Promise<string> {
   return session.user.id;
 }
 
-export async function processCapture(
+// ── Organize ──────────────────────────────────────────────────────────────────
+
+export async function organizeCapture(
   text: string,
-): Promise<ActionResult<CaptureOutput>> {
+): Promise<ActionResult<CaptureResult>> {
   try {
     await requireUserId();
     if (!text || text.trim().length < 3) {
       return { success: false, error: "Please type something first." };
     }
-
     const provider = getAIProvider();
-    const output = await provider.processCapture(text.trim());
-    return { success: true, data: output };
+    const result = await provider.organizeCapture(text.trim());
+    return { success: true, data: result };
   } catch (err) {
-    const message = err instanceof Error ? err.message : "Failed to process capture";
+    const message = err instanceof Error ? err.message : "AI is temporarily unavailable.";
     return { success: false, error: message };
   }
 }
 
+// ── Save ──────────────────────────────────────────────────────────────────────
+
 export interface SaveResult {
   tasksCreated: number;
   ideasCreated: number;
+  remindersCreated: number;
   journalSaved: boolean;
   habitsUpdated: number;
   projectsCreated: number;
 }
 
 export async function saveCapture(
-  rawOutput: unknown,
-  projectNamesToCreate: string[],
+  rawInput: unknown,
 ): Promise<ActionResult<SaveResult>> {
   try {
     const userId = await requireUserId();
-    const parsed = captureOutputSchema.safeParse(rawOutput);
+    const parsed = saveCaptureSchema.safeParse(rawInput);
     if (!parsed.success) {
-      return { success: false, error: "Invalid capture data." };
+      return {
+        success: false,
+        error: parsed.error.issues[0]?.message ?? "Invalid input.",
+      };
     }
 
-    const output = parsed.data;
+    const { tasks, ideas, habits, projects, reminders, journal, saveJournal } = parsed.data;
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
     let tasksCreated = 0;
     let ideasCreated = 0;
+    let remindersCreated = 0;
     let journalSaved = false;
     let habitsUpdated = 0;
     let projectsCreated = 0;
 
-    // 1. Create confirmed projects first so tasks can link to them
-    const createdProjects: Record<string, string> = {}; // name -> id
-    for (const name of projectNamesToCreate) {
-      const proj = output.projects.find(
-        (p) => p.name.toLowerCase() === name.toLowerCase(),
-      );
-      if (!proj) continue;
+    // 1. Projects (confirmed by user — they arrive pre-filtered)
+    const createdProjectMap: Record<string, string> = {};
+    for (const proj of projects) {
+      // Avoid creating a project that already exists
+      const existing = await prisma.project.findFirst({
+        where: { userId, name: { equals: proj.name, mode: "insensitive" } },
+      });
+      if (existing) {
+        createdProjectMap[proj.name.toLowerCase()] = existing.id;
+        continue;
+      }
       const created = await prisma.project.create({
         data: {
           name: proj.name,
@@ -76,21 +87,20 @@ export async function saveCapture(
           userId,
         },
       });
-      createdProjects[proj.name.toLowerCase()] = created.id;
+      createdProjectMap[proj.name.toLowerCase()] = created.id;
       projectsCreated++;
     }
 
-    // 2. Save tasks
-    for (const task of output.tasks) {
+    // 2. Tasks
+    for (const task of tasks) {
       let projectId: string | null = null;
       if (task.projectName) {
-        // Try existing project first
         const existing = await prisma.project.findFirst({
           where: { userId, name: { equals: task.projectName, mode: "insensitive" } },
         });
-        projectId = existing?.id ?? createdProjects[task.projectName.toLowerCase()] ?? null;
+        projectId =
+          existing?.id ?? createdProjectMap[task.projectName.toLowerCase()] ?? null;
       }
-
       await prisma.task.create({
         data: {
           title: task.title,
@@ -104,8 +114,8 @@ export async function saveCapture(
       tasksCreated++;
     }
 
-    // 3. Save ideas to Inbox
-    for (const idea of output.ideas) {
+    // 3. Ideas → Inbox (IDEA category)
+    for (const idea of ideas) {
       await prisma.inboxEntry.create({
         data: {
           title: idea.title,
@@ -117,40 +127,56 @@ export async function saveCapture(
       ideasCreated++;
     }
 
-    // 4. Upsert daily log (only if there's something to save)
-    const { accomplished, distractedBy, improveTomorrow, feeling } = output.journal;
-    const hasJournalContent = accomplished || distractedBy || improveTomorrow || feeling;
-    if (hasJournalContent) {
-      await prisma.dailyLog.upsert({
-        where: { userId_date: { userId, date: today } },
-        create: {
+    // 4. Reminders → Inbox (TASK category, as a lightweight capture)
+    for (const reminder of reminders) {
+      await prisma.inboxEntry.create({
+        data: {
+          title: reminder.title,
+          description: reminder.when ? `When: ${reminder.when}` : null,
+          category: "TASK",
           userId,
-          date: today,
-          feeling: feeling || null,
-          accomplished: accomplished || null,
-          distracted: distractedBy || null,
-          improve: improveTomorrow || null,
-        },
-        update: {
-          ...(feeling && { feeling }),
-          ...(accomplished && { accomplished }),
-          ...(distractedBy && { distracted: distractedBy }),
-          ...(improveTomorrow && { improve: improveTomorrow }),
         },
       });
-      journalSaved = true;
+      remindersCreated++;
     }
 
-    // 5. Update habits (completed ones only — match by name)
-    const completedHabits = output.habits.filter((h) => h.completed);
-    if (completedHabits.length > 0) {
-      const userHabits = await prisma.habit.findMany({ where: { userId, isActive: true } });
-      for (const capturedHabit of completedHabits) {
+    // 5. Daily log
+    if (saveJournal) {
+      const { accomplished, distractedBy, improveTomorrow, feeling } = journal;
+      const hasContent = accomplished || distractedBy || improveTomorrow || feeling;
+      if (hasContent) {
+        await prisma.dailyLog.upsert({
+          where: { userId_date: { userId, date: today } },
+          create: {
+            userId,
+            date: today,
+            feeling: feeling || null,
+            accomplished: accomplished || null,
+            distracted: distractedBy || null,
+            improve: improveTomorrow || null,
+          },
+          update: {
+            ...(feeling && { feeling }),
+            ...(accomplished && { accomplished }),
+            ...(distractedBy && { distracted: distractedBy }),
+            ...(improveTomorrow && { improve: improveTomorrow }),
+          },
+        });
+        journalSaved = true;
+      }
+    }
+
+    // 6. Habits — match by name, record completion only for completed=true
+    if (habits.length > 0) {
+      const userHabits = await prisma.habit.findMany({
+        where: { userId, isActive: true },
+      });
+      for (const captured of habits) {
+        if (!captured.completed) continue;
         const match = userHabits.find(
-          (h) => h.name.toLowerCase() === capturedHabit.name.toLowerCase(),
+          (h) => h.name.toLowerCase() === captured.name.toLowerCase(),
         );
         if (!match) continue;
-
         const existing = await prisma.habitCompletion.findUnique({
           where: { habitId_date: { habitId: match.id, date: today } },
         });
@@ -163,7 +189,6 @@ export async function saveCapture(
       }
     }
 
-    // Revalidate affected pages
     revalidatePath("/tasks");
     revalidatePath("/inbox");
     revalidatePath("/daily-log");
@@ -173,7 +198,14 @@ export async function saveCapture(
 
     return {
       success: true,
-      data: { tasksCreated, ideasCreated, journalSaved, habitsUpdated, projectsCreated },
+      data: {
+        tasksCreated,
+        ideasCreated,
+        remindersCreated,
+        journalSaved,
+        habitsUpdated,
+        projectsCreated,
+      },
     };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };

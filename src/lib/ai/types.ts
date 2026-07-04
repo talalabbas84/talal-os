@@ -1,47 +1,20 @@
-export interface CaptureTask {
-  title: string;
-  description: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-  dueDate: string | null;
-  projectName: string | null;
-}
+import type { CaptureResult } from "./schema";
 
-export interface CaptureIdea {
-  title: string;
-  description: string;
-  category: string;
-}
+// Re-export all schema types so consumers import from one place
+export type {
+  CaptureResult,
+  CaptureData,
+  TaskOutput,
+  IdeaOutput,
+  JournalOutput,
+  HabitOutput,
+  ProjectOutput,
+  ReminderOutput,
+  Confidence,
+} from "./schema";
 
-export interface CaptureJournal {
-  accomplished: string;
-  distractedBy: string;
-  improveTomorrow: string;
-  feeling: string;
-}
-
-export interface CaptureHabit {
-  name: string;
-  completed: boolean;
-  note: string;
-}
-
-export interface CaptureProject {
-  name: string;
-  description: string;
-  priority: "LOW" | "MEDIUM" | "HIGH" | "URGENT";
-}
-
-export interface CaptureOutput {
-  summary: string;
-  mood?: string;
-  healthStatus?: string;
-  tasks: CaptureTask[];
-  ideas: CaptureIdea[];
-  journal: CaptureJournal;
-  habits: CaptureHabit[];
-  projects: CaptureProject[];
-}
-
+// The single contract every provider must implement.
+// The application never knows which provider is running.
 export interface AIProvider {
-  processCapture(text: string): Promise<CaptureOutput>;
+  organizeCapture(input: string): Promise<CaptureResult>;
 }
