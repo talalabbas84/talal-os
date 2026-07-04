@@ -10,11 +10,13 @@ import {
   BookOpen,
   Repeat2,
   LogOut,
+  Sparkles,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/utils/cn";
 
 const navItems = [
+  { href: "/capture", label: "Capture", icon: Sparkles },
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/projects", label: "Projects", icon: FolderKanban },
@@ -69,7 +71,7 @@ export function Sidebar() {
       </aside>
 
       <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95 md:hidden">
-        <div className="grid grid-cols-6 gap-1">
+        <div className="grid grid-cols-7 gap-1">
           {navItems.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
