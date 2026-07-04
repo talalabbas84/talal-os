@@ -43,6 +43,7 @@ export interface SaveResult {
   journalSaved: boolean;
   habitsUpdated: number;
   projectsCreated: number;
+  memoriesSaved: number;
 }
 
 export async function saveCapture(
@@ -55,7 +56,7 @@ export async function saveCapture(
       return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
     }
 
-    const { tasks, ideas, habits, projects, reminders, journal, saveJournal } = parsed.data;
+    const { tasks, ideas, habits, projects, reminders, journal, saveJournal, memories } = parsed.data;
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -65,6 +66,7 @@ export async function saveCapture(
     let journalSaved = false;
     let habitsUpdated = 0;
     let projectsCreated = 0;
+    let memoriesSaved = 0;
 
     // 1. Projects (user explicitly opted-in)
     const projectMap: Record<string, string> = {};
@@ -83,7 +85,7 @@ export async function saveCapture(
       projectsCreated++;
     }
 
-    // 2. Tasks — save all new metadata fields + compute score
+    // 2. Tasks — save all metadata fields + computed score
     for (const task of tasks) {
       let projectId: string | null = null;
       if (task.projectName) {
@@ -180,14 +182,33 @@ export async function saveCapture(
       }
     }
 
+    // 7. Memory candidates → MemoryEntry
+    for (const mem of memories) {
+      await prisma.memoryEntry.create({
+        data: {
+          title: mem.title,
+          content: mem.content,
+          type: mem.type,
+          importance: mem.importance,
+          source: "CAPTURE",
+          userId,
+        },
+      });
+      memoriesSaved++;
+    }
+
     revalidatePath("/tasks");
     revalidatePath("/inbox");
     revalidatePath("/daily-log");
     revalidatePath("/habits");
     revalidatePath("/projects");
+    revalidatePath("/memory");
     revalidatePath("/");
 
-    return { success: true, data: { tasksCreated, ideasCreated, remindersCreated, journalSaved, habitsUpdated, projectsCreated } };
+    return {
+      success: true,
+      data: { tasksCreated, ideasCreated, remindersCreated, journalSaved, habitsUpdated, projectsCreated, memoriesSaved },
+    };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };
   }

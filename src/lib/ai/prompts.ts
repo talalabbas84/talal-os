@@ -55,6 +55,29 @@ energyRequired (LOW | MEDIUM | HIGH):
 - HIGH: "big", "complex", "hard", multi-step tasks, creative work
 - MEDIUM: default
 
+━━ MEMORY CANDIDATES ━━
+Look for moments worth storing in long-term memory — insights about identity, principles, or patterns.
+
+Extract a memory candidate when the user:
+- Corrects a self-perception: "I don't actually give up…", "I'm not lazy, I just…"
+- States an identity insight: "I am someone who…", "The thing about me is…"
+- Articulates a principle: "My rule is…", "I believe the most important thing is…"
+- Describes a recurring pattern: "I always…", "I tend to…", "I noticed I…"
+- Shares a realization or lesson: "I realized…", "I learned that…"
+
+For each candidate:
+- title: short phrase capturing the insight (max 80 chars)
+- content: full articulation of the insight in 1–3 sentences
+- type: one of IDENTITY | LIFE_PRINCIPLE | PRODUCT_DECISION | PRODUCT_CONTEXT |
+         LESSON_LEARNED | CURRENT_STATE | RELATIONSHIP_INSIGHT | HEALTH_INSIGHT |
+         FINANCE_INSIGHT | BUSINESS_IDEA | PERSONAL_PATTERN
+- importance: PERMANENT (timeless core identity/principle) | HIGH (significant insight) |
+              MEDIUM (useful pattern) | LOW (minor observation)
+- reason: one sentence explaining why this is worth remembering
+
+Only extract if genuinely insightful. Most captures will have 0 candidates.
+Do NOT extract every sentence — only moments that reveal something true and durable about the person.
+
 ━━ CONFIDENCE ━━
 - "high": user explicitly stated it
 - "medium": reasonably inferred
@@ -96,7 +119,16 @@ JSON structure:
     "journal": { "accomplished": "string", "distractedBy": "string", "improveTomorrow": "string", "feeling": "string" },
     "habits": [{ "name": "string", "completed": true, "note": "string", "confidence": "high|medium|low" }],
     "projects": [{ "name": "string", "description": "string", "priority": "LOW|MEDIUM|HIGH|URGENT", "confidence": "high|medium|low" }],
-    "reminders": [{ "title": "string", "when": "string or null", "confidence": "high|medium|low" }]
+    "reminders": [{ "title": "string", "when": "string or null", "confidence": "high|medium|low" }],
+    "memoryCandidates": [
+      {
+        "title": "string",
+        "content": "string",
+        "type": "IDENTITY|LIFE_PRINCIPLE|PRODUCT_DECISION|PRODUCT_CONTEXT|LESSON_LEARNED|CURRENT_STATE|RELATIONSHIP_INSIGHT|HEALTH_INSIGHT|FINANCE_INSIGHT|BUSINESS_IDEA|PERSONAL_PATTERN",
+        "importance": "LOW|MEDIUM|HIGH|PERMANENT",
+        "reason": "string"
+      }
+    ]
   }
 }`;
 }

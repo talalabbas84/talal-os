@@ -1,5 +1,5 @@
 import type { AIProvider } from "./types";
-import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput } from "./schema";
+import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput, MemoryCandidateOutput } from "./schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -139,6 +139,132 @@ function extractPriority(sentence: string, timeInfo: TimeInfo): PriorityInfo {
   return { urgency, importance, energyRequired };
 }
 
+// ── Memory candidate extraction ───────────────────────────────────────────────
+
+type MemoryType =
+  | "IDENTITY" | "LIFE_PRINCIPLE" | "PRODUCT_DECISION" | "PRODUCT_CONTEXT"
+  | "LESSON_LEARNED" | "CURRENT_STATE" | "RELATIONSHIP_INSIGHT" | "HEALTH_INSIGHT"
+  | "FINANCE_INSIGHT" | "BUSINESS_IDEA" | "PERSONAL_PATTERN";
+
+type MemoryImportance = "LOW" | "MEDIUM" | "HIGH" | "PERMANENT";
+
+interface MemoryPattern {
+  regex: RegExp;
+  type: MemoryType;
+  importance: MemoryImportance;
+  reason: string;
+}
+
+const MEMORY_PATTERNS: MemoryPattern[] = [
+  {
+    regex: /i\s+(?:don'?t|do not|didn'?t|did not)\s+actually\b/i,
+    type: "IDENTITY",
+    importance: "PERMANENT",
+    reason: "Correcting a self-perception — this is a core identity insight.",
+  },
+  {
+    regex: /i(?:'m|\s+am)\s+someone\s+who\b/i,
+    type: "IDENTITY",
+    importance: "HIGH",
+    reason: "Explicit identity statement about who Talal is.",
+  },
+  {
+    regex: /the\s+thing\s+about\s+me\s+is\b/i,
+    type: "IDENTITY",
+    importance: "HIGH",
+    reason: "Self-insight about personal nature.",
+  },
+  {
+    regex: /my\s+(?:rule|principle|philosophy|approach|belief)\s+is\b/i,
+    type: "LIFE_PRINCIPLE",
+    importance: "PERMANENT",
+    reason: "Explicit life principle or personal rule.",
+  },
+  {
+    regex: /i\s+believe\s+(?:that\s+)?(?:the\s+)?(?:most\s+)?important\b/i,
+    type: "LIFE_PRINCIPLE",
+    importance: "HIGH",
+    reason: "Statement of what the user values most.",
+  },
+  {
+    regex: /i\s+(?:realized|realised)\b/i,
+    type: "LESSON_LEARNED",
+    importance: "HIGH",
+    reason: "An explicit realization — often a lesson worth keeping.",
+  },
+  {
+    regex: /i(?:'ve|\s+have)\s+(?:learned|learnt)\b/i,
+    type: "LESSON_LEARNED",
+    importance: "MEDIUM",
+    reason: "An explicit learning the user articulated.",
+  },
+  {
+    regex: /i\s+noticed\s+(?:that\s+)?i\b/i,
+    type: "PERSONAL_PATTERN",
+    importance: "MEDIUM",
+    reason: "Self-observation about a recurring personal pattern.",
+  },
+  {
+    regex: /i\s+(?:always|never)\s+(?!skip|miss|forget)/i,
+    type: "PERSONAL_PATTERN",
+    importance: "MEDIUM",
+    reason: "Always/never statement — habitual behavior pattern.",
+  },
+  {
+    regex: /i\s+tend\s+to\b/i,
+    type: "PERSONAL_PATTERN",
+    importance: "MEDIUM",
+    reason: "Recurring behavior tendency.",
+  },
+  {
+    regex: /i(?:'ve|\s+have)\s+come\s+to\s+(?:understand|realize|know|see)\b/i,
+    type: "LESSON_LEARNED",
+    importance: "HIGH",
+    reason: "Evolved understanding — insight that developed over time.",
+  },
+  {
+    regex: /i\s+(?:keep|kept)\s+(?:coming\s+back|returning)\b/i,
+    type: "PERSONAL_PATTERN",
+    importance: "HIGH",
+    reason: "Pattern of returning — shows persistence or unresolved pull.",
+  },
+];
+
+function extractMemoryCandidates(text: string): MemoryCandidateOutput[] {
+  const candidates: MemoryCandidateOutput[] = [];
+  const seen = new Set<string>();
+  const sentences = splitSentences(text);
+
+  for (const sentence of sentences) {
+    if (sentence.length < 15 || sentence.length > 400) continue;
+
+    for (const pattern of MEMORY_PATTERNS) {
+      if (!pattern.regex.test(sentence)) continue;
+
+      const content = sentence.replace(/[.!?]+$/, "").trim();
+      const key = content.toLowerCase().slice(0, 60);
+      if (seen.has(key)) break;
+      seen.add(key);
+
+      // Build a short title from the sentence
+      const title = content.length > 70
+        ? capitalize(content.slice(0, 67)) + "…"
+        : capitalize(content);
+
+      candidates.push({
+        title,
+        content: capitalize(content),
+        type: pattern.type,
+        importance: pattern.importance,
+        reason: pattern.reason,
+      });
+      break; // one pattern match per sentence
+    }
+  }
+
+  return candidates;
+}
+
 // ── Field extractors ──────────────────────────────────────────────────────────
 
 function extractHealthStatus(text: string): string | undefined {
@@ -273,6 +399,7 @@ function buildReflection(
   tasks: TaskOutput[],
   ideas: IdeaOutput[],
   habits: HabitOutput[],
+  memories: MemoryCandidateOutput[],
   healthStatus?: string,
   mood?: string,
 ): string {
@@ -288,6 +415,7 @@ function buildReflection(
   if (tasks.length > 0) found.push(`${tasks.length} task${tasks.length !== 1 ? "s" : ""}`);
   if (ideas.length > 0) found.push(`${ideas.length} idea${ideas.length !== 1 ? "s" : ""}`);
   if (habits.length > 0) found.push(`${habits.length} habit${habits.length !== 1 ? "s" : ""}`);
+  if (memories.length > 0) found.push(`${memories.length} memory insight${memories.length !== 1 ? "s" : ""}`);
   if (found.length > 0) parts.push(`I found ${found.join(", ")}.`);
 
   const urgentToday = tasks.filter((t) => t.dueDate === dateISO(0) || t.urgency === "HIGH");
@@ -318,6 +446,7 @@ export const mockProvider: AIProvider = {
     const tasks = extractTasks(input);
     const ideas = extractIdeas(input);
     const habits = extractHabits(input, healthStatus);
+    const memoryCandidates = extractMemoryCandidates(input);
 
     const improveTomorrow = tasks
       .filter((t) => t.dueDate === dateISO(1))
@@ -336,10 +465,11 @@ export const mockProvider: AIProvider = {
       tasks.length > 0 && `${tasks.length} task${tasks.length !== 1 ? "s" : ""} identified`,
       ideas.length > 0 && `${ideas.length} idea${ideas.length !== 1 ? "s" : ""} captured`,
       habits.length > 0 && `${habits.length} habit${habits.length !== 1 ? "s" : ""} tracked`,
+      memoryCandidates.length > 0 && `${memoryCandidates.length} memory insight${memoryCandidates.length !== 1 ? "s" : ""} detected`,
     ].filter(Boolean).join(". ");
 
     return {
-      reflection: buildReflection(tasks, ideas, habits, healthStatus, mood),
+      reflection: buildReflection(tasks, ideas, habits, memoryCandidates, healthStatus, mood),
       data: {
         summary: summary || "Capture processed.",
         mood,
@@ -350,6 +480,7 @@ export const mockProvider: AIProvider = {
         habits,
         projects: [],
         reminders: [],
+        memoryCandidates,
       },
     };
   },

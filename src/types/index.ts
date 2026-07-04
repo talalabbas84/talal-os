@@ -7,6 +7,7 @@ import type {
   DailyLog,
   Habit,
   HabitCompletion,
+  MemoryEntry,
   InboxCategory,
   InboxStatus,
   ProjectStatus,
@@ -14,6 +15,9 @@ import type {
   TaskStatus,
   Frequency,
   Level,
+  MemoryType,
+  MemoryImportance,
+  MemorySource,
 } from "@prisma/client";
 
 export type {
@@ -25,6 +29,7 @@ export type {
   DailyLog,
   Habit,
   HabitCompletion,
+  MemoryEntry,
   InboxCategory,
   InboxStatus,
   ProjectStatus,
@@ -32,6 +37,9 @@ export type {
   TaskStatus,
   Frequency,
   Level,
+  MemoryType,
+  MemoryImportance,
+  MemorySource,
 };
 
 export type TaskWithProject = Prisma.TaskGetPayload<{

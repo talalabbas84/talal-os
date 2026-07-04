@@ -10,6 +10,7 @@ export type {
   HabitOutput,
   ProjectOutput,
   ReminderOutput,
+  MemoryCandidateOutput,
   Confidence,
 } from "./schema";
 

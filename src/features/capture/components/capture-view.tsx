@@ -9,14 +9,26 @@ import {
   Repeat2,
   FolderPlus,
   Bell,
+  Brain,
   Loader2,
   AlertCircle,
   CheckCircle2,
   RotateCcw,
+  Pencil,
+  X,
 } from "lucide-react";
 import { organizeCapture, saveCapture, type SaveResult } from "../actions/capture.actions";
-import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput } from "@/lib/ai/types";
+import type {
+  CaptureResult,
+  TaskOutput,
+  IdeaOutput,
+  HabitOutput,
+  ProjectOutput,
+  ReminderOutput,
+  MemoryCandidateOutput,
+} from "@/lib/ai/types";
 import type { SaveCaptureInput } from "../lib/schema";
+import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -29,7 +41,14 @@ interface Inclusion {
   habits: boolean[];
   projects: boolean[];
   reminders: boolean[];
+  memories: boolean[];
   journal: boolean;
+}
+
+// edit state committed to parent when user clicks "Save" inside a candidate card
+interface MemoryEdit {
+  title: string;
+  content: string;
 }
 
 // ── Root component ────────────────────────────────────────────────────────────
@@ -41,6 +60,7 @@ export function CaptureView({ userName }: { userName: string }) {
   const [text, setText] = useState("");
   const [result, setResult] = useState<CaptureResult | null>(null);
   const [inclusion, setInclusion] = useState<Inclusion | null>(null);
+  const [memoryEdits, setMemoryEdits] = useState<Record<number, MemoryEdit>>({});
   const [error, setError] = useState<string | null>(null);
   const [saveResult, setSaveResult] = useState<SaveResult | null>(null);
   const [isOrganizing, startOrganizing] = useTransition();
@@ -57,13 +77,18 @@ export function CaptureView({ userName }: { userName: string }) {
         return;
       }
       const d = res.data.data;
-      // High/medium → included by default. Low → excluded (requires explicit confirmation).
+      setMemoryEdits({});
+      // High/medium → included by default. Low → excluded. Projects always opt-in.
+      // Memory: PERMANENT/HIGH → included, MEDIUM/LOW → excluded.
       setInclusion({
         tasks: d.tasks.map((i) => i.confidence !== "low"),
         ideas: d.ideas.map((i) => i.confidence !== "low"),
         habits: d.habits.map((i) => i.confidence !== "low"),
-        projects: d.projects.map(() => false), // projects always opt-in
+        projects: d.projects.map(() => false),
         reminders: d.reminders.map((i) => i.confidence !== "low"),
+        memories: d.memoryCandidates.map(
+          (m) => m.importance === "PERMANENT" || m.importance === "HIGH",
+        ),
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       });
       setResult(res.data);
@@ -76,18 +101,20 @@ export function CaptureView({ userName }: { userName: string }) {
     setStep("input");
     setResult(null);
     setInclusion(null);
+    setMemoryEdits({});
   }
 
-  function toggle(
-    key: keyof Omit<Inclusion, "journal">,
-    index: number,
-  ) {
+  function toggle(key: keyof Omit<Inclusion, "journal">, index: number) {
     setInclusion((prev) => {
       if (!prev) return prev;
       const arr = [...prev[key]];
       arr[index] = !arr[index];
       return { ...prev, [key]: arr };
     });
+  }
+
+  function handleMemorySaveEdit(i: number, title: string, content: string) {
+    setMemoryEdits((prev) => ({ ...prev, [i]: { title, content } }));
   }
 
   function handleSave() {
@@ -103,6 +130,18 @@ export function CaptureView({ userName }: { userName: string }) {
       reminders: d.reminders.filter((_, i) => inclusion.reminders[i]),
       journal: d.journal,
       saveJournal: inclusion.journal,
+      memories: d.memoryCandidates
+        .map((m, i) => ({ m, i }))
+        .filter(({ i }) => !!inclusion.memories[i])
+        .map(({ m, i }) => {
+          const edit = memoryEdits[i];
+          return {
+            title: edit?.title ?? m.title,
+            content: edit?.content ?? m.content,
+            type: m.type,
+            importance: m.importance,
+          };
+        }),
     };
 
     startSaving(async () => {
@@ -123,6 +162,7 @@ export function CaptureView({ userName }: { userName: string }) {
     setInclusion(null);
     setError(null);
     setSaveResult(null);
+    setMemoryEdits({});
   }
 
   // ── Render ──────────────────────────────────────────────────────────────────
@@ -149,10 +189,12 @@ export function CaptureView({ userName }: { userName: string }) {
         <PreviewView
           result={result}
           inclusion={inclusion}
+          memoryEdits={memoryEdits}
           onToggle={toggle}
           onToggleJournal={() =>
             setInclusion((p) => p && { ...p, journal: !p.journal })
           }
+          onMemorySaveEdit={handleMemorySaveEdit}
           onEdit={handleRetry}
           onSave={handleSave}
           isSaving={isSaving}
@@ -248,8 +290,10 @@ function InputView({
 function PreviewView({
   result,
   inclusion,
+  memoryEdits,
   onToggle,
   onToggleJournal,
+  onMemorySaveEdit,
   onEdit,
   onSave,
   isSaving,
@@ -257,8 +301,10 @@ function PreviewView({
 }: {
   result: CaptureResult;
   inclusion: Inclusion;
+  memoryEdits: Record<number, MemoryEdit>;
   onToggle: (key: keyof Omit<Inclusion, "journal">, index: number) => void;
   onToggleJournal: () => void;
+  onMemorySaveEdit: (i: number, title: string, content: string) => void;
   onEdit: () => void;
   onSave: () => void;
   isSaving: boolean;
@@ -270,6 +316,7 @@ function PreviewView({
     d.ideas.length > 0 ||
     d.habits.length > 0 ||
     d.reminders.length > 0 ||
+    d.memoryCandidates.length > 0 ||
     d.journal.feeling ||
     d.journal.improveTomorrow;
 
@@ -279,6 +326,7 @@ function PreviewView({
     inclusion.habits.filter(Boolean).length +
     inclusion.projects.filter(Boolean).length +
     inclusion.reminders.filter(Boolean).length +
+    inclusion.memories.filter(Boolean).length +
     (inclusion.journal ? 1 : 0);
 
   return (
@@ -296,12 +344,8 @@ function PreviewView({
         </p>
         {(d.mood || d.healthStatus) && (
           <div className="mt-3 flex flex-wrap gap-2">
-            {d.mood && (
-              <Chip color="blue">{d.mood}</Chip>
-            )}
-            {d.healthStatus && (
-              <Chip color="amber">{d.healthStatus}</Chip>
-            )}
+            {d.mood && <Chip color="blue">{d.mood}</Chip>}
+            {d.healthStatus && <Chip color="amber">{d.healthStatus}</Chip>}
           </div>
         )}
       </div>
@@ -407,6 +451,32 @@ function PreviewView({
         </Section>
       )}
 
+      {/* Memory candidates — always require explicit review */}
+      {d.memoryCandidates.length > 0 && (
+        <Section
+          icon={Brain}
+          title="Possible Memories"
+          count={d.memoryCandidates.length}
+          note="→ Memory Vault"
+        >
+          {d.memoryCandidates.map((candidate, i) => (
+            <ItemRow
+              key={i}
+              included={!!inclusion.memories[i]}
+              onToggle={() => onToggle("memories", i)}
+              confidence="high"
+              alwaysShowToggle
+            >
+              <MemoryCandidateCard
+                candidate={candidate}
+                index={i}
+                onSaveEdit={onMemorySaveEdit}
+              />
+            </ItemRow>
+          ))}
+        </Section>
+      )}
+
       {/* Error */}
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
@@ -467,6 +537,7 @@ function SavedView({ result, onReset }: { result: SaveResult; onReset: () => voi
     result.journalSaved && "Daily log updated",
     result.habitsUpdated > 0 && `${result.habitsUpdated} habit completion${result.habitsUpdated !== 1 ? "s" : ""} recorded`,
     result.projectsCreated > 0 && `${result.projectsCreated} project${result.projectsCreated !== 1 ? "s" : ""} created`,
+    result.memoriesSaved > 0 && `${result.memoriesSaved} memor${result.memoriesSaved !== 1 ? "ies" : "y"} saved to vault`,
   ].filter(Boolean) as string[];
 
   return (
@@ -609,6 +680,8 @@ function ItemRow({
   );
 }
 
+// ── Card components ───────────────────────────────────────────────────────────
+
 const URGENCY_COLORS: Record<string, string> = {
   LOW: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
   MEDIUM: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400",
@@ -675,7 +748,7 @@ function MetaBadge({
   colors: Record<string, string>;
   title: string;
 }) {
-  if (value === "MEDIUM") return null; // only show non-default values to reduce noise
+  if (value === "MEDIUM") return null;
   return (
     <span
       title={`${title}: ${value}`}
@@ -748,6 +821,107 @@ function ReminderCard({ reminder }: { reminder: ReminderOutput }) {
     <div>
       <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{reminder.title}</p>
       {reminder.when && <p className="mt-0.5 text-xs text-neutral-400">{reminder.when}</p>}
+    </div>
+  );
+}
+
+function MemoryCandidateCard({
+  candidate,
+  index,
+  onSaveEdit,
+}: {
+  candidate: MemoryCandidateOutput;
+  index: number;
+  onSaveEdit: (i: number, title: string, content: string) => void;
+}) {
+  const [committed, setCommitted] = useState({
+    title: candidate.title,
+    content: candidate.content,
+  });
+  const [editing, setEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(candidate.title);
+  const [editContent, setEditContent] = useState(candidate.content);
+
+  function handleSave() {
+    const saved = { title: editTitle, content: editContent };
+    setCommitted(saved);
+    onSaveEdit(index, editTitle, editContent);
+    setEditing(false);
+  }
+
+  function handleCancel() {
+    setEditTitle(committed.title);
+    setEditContent(committed.content);
+    setEditing(false);
+  }
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex flex-wrap gap-1">
+          <span
+            className={cn(
+              "rounded-full px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider",
+              IMPORTANCE_STYLES[candidate.importance as keyof typeof IMPORTANCE_STYLES] ??
+                "bg-neutral-100 text-neutral-500",
+            )}
+          >
+            {candidate.importance}
+          </span>
+          <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">
+            {TYPE_LABELS[candidate.type as keyof typeof TYPE_LABELS] ?? candidate.type}
+          </span>
+        </div>
+        {!editing && (
+          <button
+            onClick={() => setEditing(true)}
+            className="shrink-0 text-neutral-300 transition-colors hover:text-neutral-500"
+            aria-label="Edit memory candidate"
+          >
+            <Pencil className="h-3.5 w-3.5" />
+          </button>
+        )}
+      </div>
+
+      {editing ? (
+        <div className="space-y-2">
+          <input
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            className="w-full rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-900 outline-none focus:border-neutral-400 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-50"
+          />
+          <textarea
+            value={editContent}
+            onChange={(e) => setEditContent(e.target.value)}
+            rows={2}
+            className="w-full resize-none rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-sm text-neutral-700 outline-none focus:border-neutral-400 dark:border-neutral-600 dark:bg-neutral-800 dark:text-neutral-300"
+          />
+          <div className="flex gap-2">
+            <button
+              onClick={handleSave}
+              className="flex items-center gap-1 rounded-md bg-neutral-900 px-2.5 py-1 text-xs font-medium text-white dark:bg-neutral-50 dark:text-neutral-900"
+            >
+              <CheckCircle2 className="h-3 w-3" /> Save
+            </button>
+            <button
+              onClick={handleCancel}
+              className="flex items-center gap-1 rounded-md border border-neutral-200 px-2.5 py-1 text-xs text-neutral-500 dark:border-neutral-600"
+            >
+              <X className="h-3 w-3" /> Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
+          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">
+            {committed.title}
+          </p>
+          <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">
+            {committed.content}
+          </p>
+          <p className="text-[10px] italic text-neutral-400">{candidate.reason}</p>
+        </>
+      )}
     </div>
   );
 }

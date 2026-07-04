@@ -8,6 +8,24 @@ export type Confidence = z.infer<typeof confidenceSchema>;
 export const levelSchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
 export type Level = z.infer<typeof levelSchema>;
 
+// ── Memory enums ──────────────────────────────────────────────────────────────
+
+export const MEMORY_TYPES = [
+  "IDENTITY",
+  "LIFE_PRINCIPLE",
+  "PRODUCT_DECISION",
+  "PRODUCT_CONTEXT",
+  "LESSON_LEARNED",
+  "CURRENT_STATE",
+  "RELATIONSHIP_INSIGHT",
+  "HEALTH_INSIGHT",
+  "FINANCE_INSIGHT",
+  "BUSINESS_IDEA",
+  "PERSONAL_PATTERN",
+] as const;
+
+export const MEMORY_IMPORTANCES = ["LOW", "MEDIUM", "HIGH", "PERMANENT"] as const;
+
 // ── Item schemas ──────────────────────────────────────────────────────────────
 
 export const taskOutputSchema = z.object({
@@ -66,6 +84,14 @@ export const reminderOutputSchema = z.object({
   confidence: confidenceSchema.default("medium"),
 });
 
+export const memoryCandidateSchema = z.object({
+  title: z.string().min(1).max(255),
+  content: z.string().min(1),
+  type: z.enum(MEMORY_TYPES),
+  importance: z.enum(MEMORY_IMPORTANCES),
+  reason: z.string().min(1),
+});
+
 // ── Full capture data ─────────────────────────────────────────────────────────
 
 export const captureDataSchema = z.object({
@@ -83,6 +109,7 @@ export const captureDataSchema = z.object({
   habits: z.array(habitOutputSchema).default([]),
   projects: z.array(projectOutputSchema).default([]),
   reminders: z.array(reminderOutputSchema).default([]),
+  memoryCandidates: z.array(memoryCandidateSchema).default([]),
 });
 
 // ── Top-level result ──────────────────────────────────────────────────────────
@@ -100,5 +127,6 @@ export type JournalOutput = z.infer<typeof journalOutputSchema>;
 export type HabitOutput = z.infer<typeof habitOutputSchema>;
 export type ProjectOutput = z.infer<typeof projectOutputSchema>;
 export type ReminderOutput = z.infer<typeof reminderOutputSchema>;
+export type MemoryCandidateOutput = z.infer<typeof memoryCandidateSchema>;
 export type CaptureData = z.infer<typeof captureDataSchema>;
 export type CaptureResult = z.infer<typeof captureResultSchema>;

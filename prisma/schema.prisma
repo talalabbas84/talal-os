@@ -14,11 +14,12 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  inboxEntries InboxEntry[]
-  projects     Project[]
-  tasks        Task[]
-  dailyLogs    DailyLog[]
-  habits       Habit[]
+  inboxEntries  InboxEntry[]
+  projects      Project[]
+  tasks         Task[]
+  dailyLogs     DailyLog[]
+  habits        Habit[]
+  memoryEntries MemoryEntry[]
 }
 
 model InboxEntry {
@@ -141,6 +142,26 @@ model HabitCompletion {
   @@index([date])
 }
 
+model MemoryEntry {
+  id         String           @id @default(cuid())
+  title      String
+  content    String
+  type       MemoryType
+  importance MemoryImportance @default(MEDIUM)
+  source     MemorySource     @default(MANUAL)
+  createdAt  DateTime         @default(now())
+  updatedAt  DateTime         @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([importance])
+}
+
+// ── Enums ──────────────────────────────────────────────────────────────────────
+
 enum InboxCategory {
   IDEA
   TASK
@@ -190,4 +211,33 @@ enum Level {
   LOW
   MEDIUM
   HIGH
+}
+
+enum MemoryType {
+  IDENTITY
+  LIFE_PRINCIPLE
+  PRODUCT_DECISION
+  PRODUCT_CONTEXT
+  LESSON_LEARNED
+  CURRENT_STATE
+  RELATIONSHIP_INSIGHT
+  HEALTH_INSIGHT
+  FINANCE_INSIGHT
+  BUSINESS_IDEA
+  PERSONAL_PATTERN
+}
+
+// Declaration order = sort order (LOW first → PERMANENT last for ASC)
+enum MemoryImportance {
+  LOW
+  MEDIUM
+  HIGH
+  PERMANENT
+}
+
+enum MemorySource {
+  CAPTURE
+  MANUAL
+  WEEKLY_REVIEW
+  AI_REFLECTION
 }
