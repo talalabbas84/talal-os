@@ -10,7 +10,7 @@ import {
 import { HabitDialog } from "./habit-dialog";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/utils/cn";
-import type { HabitWithCompletions } from "@/types";
+import type { HabitCompletion, HabitWithCompletions } from "@/types";
 
 function HabitRow({ habit }: { habit: HabitWithCompletions }) {
   const today = new Date().toISOString().split("T")[0];
@@ -20,8 +20,9 @@ function HabitRow({ habit }: { habit: HabitWithCompletions }) {
 
   if (deleted) return null;
 
-  const realDone = habit.completions.some((c) =>
-    c.date.toString().startsWith(today),
+  const completions: HabitCompletion[] = habit.completions;
+  const realDone = completions.some((completion: HabitCompletion) =>
+    completion.date.toString().startsWith(today),
   );
   const isDone = optimisticDone ?? realDone;
 
@@ -113,8 +114,12 @@ function HabitRow({ habit }: { habit: HabitWithCompletions }) {
 }
 
 export function HabitListView({ habits }: { habits: HabitWithCompletions[] }) {
-  const active = habits.filter((h) => h.isActive);
-  const inactive = habits.filter((h) => !h.isActive);
+  const active: HabitWithCompletions[] = habits.filter(
+    (habit: HabitWithCompletions) => habit.isActive,
+  );
+  const inactive: HabitWithCompletions[] = habits.filter(
+    (habit: HabitWithCompletions) => !habit.isActive,
+  );
 
   return (
     <div className="space-y-6">
@@ -126,8 +131,8 @@ export function HabitListView({ habits }: { habits: HabitWithCompletions[] }) {
         <>
           {active.length > 0 && (
             <div className="space-y-2">
-              {active.map((h) => (
-                <HabitRow key={h.id} habit={h} />
+              {active.map((habit: HabitWithCompletions) => (
+                <HabitRow key={habit.id} habit={habit} />
               ))}
             </div>
           )}
@@ -136,8 +141,8 @@ export function HabitListView({ habits }: { habits: HabitWithCompletions[] }) {
               <p className="text-xs font-medium uppercase tracking-wider text-neutral-400">
                 Inactive
               </p>
-              {inactive.map((h) => (
-                <HabitRow key={h.id} habit={h} />
+              {inactive.map((habit: HabitWithCompletions) => (
+                <HabitRow key={habit.id} habit={habit} />
               ))}
             </div>
           )}
