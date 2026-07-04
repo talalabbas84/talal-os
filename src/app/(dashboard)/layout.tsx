@@ -9,11 +9,13 @@ export default function DashboardLayout({
 }) {
   return (
     <SessionProvider>
-      <div className="flex h-screen overflow-hidden">
+      <div className="flex h-dvh overflow-hidden">
         <Sidebar />
         <div className="flex flex-1 flex-col overflow-hidden">
           <Header />
-          <main className="flex-1 overflow-y-auto p-6">{children}</main>
+          <main className="flex-1 overflow-y-auto px-4 pb-24 pt-4 md:p-6">
+            {children}
+          </main>
         </div>
       </div>
     </SessionProvider>

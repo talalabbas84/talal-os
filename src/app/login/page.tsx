@@ -7,7 +7,7 @@ export default async function LoginPage() {
   if (session) redirect("/");
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-neutral-50 dark:bg-neutral-950">
+    <main className="flex min-h-dvh items-center justify-center bg-neutral-50 px-4 py-8 dark:bg-neutral-950">
       <div className="w-full max-w-sm space-y-8 px-4">
         <div className="space-y-1 text-center">
           <h1 className="text-2xl font-semibold tracking-tight text-neutral-900 dark:text-neutral-50">

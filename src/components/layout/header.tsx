@@ -9,10 +9,12 @@ export async function Header() {
   });
 
   return (
-    <header className="flex h-16 items-center justify-between border-b border-neutral-200 bg-white px-6 dark:border-neutral-800 dark:bg-neutral-950">
-      <p className="text-sm text-neutral-500 dark:text-neutral-400">{today}</p>
+    <header className="flex h-14 shrink-0 items-center justify-between border-b border-neutral-200 bg-white px-4 pt-[env(safe-area-inset-top)] dark:border-neutral-800 dark:bg-neutral-950 md:h-16 md:px-6 md:pt-0">
+      <p className="truncate text-sm text-neutral-500 dark:text-neutral-400">
+        {today}
+      </p>
       {session?.user?.name && (
-        <p className="text-sm text-neutral-500 dark:text-neutral-400">
+        <p className="ml-3 truncate text-sm text-neutral-500 dark:text-neutral-400">
           {session.user.name}
         </p>
       )}
