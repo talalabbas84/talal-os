@@ -9,7 +9,7 @@ import {
 } from "@/lib/ai/schema";
 
 // Validates the payload the client sends to saveCapture.
-// The client pre-filters items (based on confidence toggles) before sending.
+// The client pre-filters items based on the user's inclusion toggles.
 export const saveCaptureSchema = z.object({
   tasks: z.array(taskOutputSchema),
   ideas: z.array(ideaOutputSchema),

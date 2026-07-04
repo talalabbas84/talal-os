@@ -1,11 +1,12 @@
 import { z } from "zod";
 
 // ── Confidence ────────────────────────────────────────────────────────────────
-// high   = user explicitly stated it  ("I need to buy groceries")
-// medium = reasonably inferred        ("thinking about an AI website")
-// low    = uncertain / mentioned in passing — requires user confirmation before saving
 export const confidenceSchema = z.enum(["high", "medium", "low"]);
 export type Confidence = z.infer<typeof confidenceSchema>;
+
+// ── Level (importance / urgency / energy) ─────────────────────────────────────
+export const levelSchema = z.enum(["LOW", "MEDIUM", "HIGH"]);
+export type Level = z.infer<typeof levelSchema>;
 
 // ── Item schemas ──────────────────────────────────────────────────────────────
 
@@ -13,7 +14,20 @@ export const taskOutputSchema = z.object({
   title: z.string().min(1).max(255),
   description: z.string().default(""),
   priority: z.enum(["LOW", "MEDIUM", "HIGH", "URGENT"]).default("MEDIUM"),
-  dueDate: z.string().nullable().default(null),
+
+  // Time awareness
+  dueDate: z.string().nullable().default(null),   // "YYYY-MM-DD"
+  dueTime: z.string().nullable().default(null),   // "morning" | "afternoon" | "evening" | "night"
+  timeContext: z.string().nullable().default(null), // "tonight" | "after_work" | "before_dance" …
+
+  // Reminder intent
+  needsReminder: z.boolean().default(false),
+
+  // Priority matrix
+  importance: levelSchema.default("MEDIUM"),
+  urgency: levelSchema.default("MEDIUM"),
+  energyRequired: levelSchema.default("MEDIUM"),
+
   projectName: z.string().nullable().default(null),
   confidence: confidenceSchema.default("high"),
 });
@@ -71,7 +85,7 @@ export const captureDataSchema = z.object({
   reminders: z.array(reminderOutputSchema).default([]),
 });
 
-// ── Top-level result (reflection + data) ──────────────────────────────────────
+// ── Top-level result ──────────────────────────────────────────────────────────
 
 export const captureResultSchema = z.object({
   reflection: z.string().min(1),

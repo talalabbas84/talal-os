@@ -1,10 +1,5 @@
 import type { AIProvider } from "./types";
-import type {
-  CaptureResult,
-  TaskOutput,
-  IdeaOutput,
-  HabitOutput,
-} from "./schema";
+import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput } from "./schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -29,9 +24,17 @@ function capitalize(s: string): string {
   return s ? s.charAt(0).toUpperCase() + s.slice(1) : s;
 }
 
-function getTomorrow(): string {
+function dateISO(offset: number): string {
   const d = new Date();
-  d.setDate(d.getDate() + 1);
+  d.setDate(d.getDate() + offset);
+  return d.toISOString().split("T")[0]!;
+}
+
+function nextWeekday(day: number): string {
+  // day: 0=Sun … 6=Sat
+  const d = new Date();
+  const diff = ((day - d.getDay() + 7) % 7) || 7;
+  d.setDate(d.getDate() + diff);
   return d.toISOString().split("T")[0]!;
 }
 
@@ -39,7 +42,104 @@ function splitSentences(text: string): string[] {
   return text.split(/(?<=[.!?])\s+|\n+/).filter((s) => s.trim().length > 0);
 }
 
-// ── Extractors ────────────────────────────────────────────────────────────────
+// ── Time extraction ───────────────────────────────────────────────────────────
+
+interface TimeInfo {
+  dueDate: string | null;
+  dueTime: string | null;
+  timeContext: string | null;
+  needsReminder: boolean;
+}
+
+function extractTimeInfo(sentence: string): TimeInfo {
+  const l = sentence.toLowerCase();
+
+  let dueDate: string | null = null;
+  let dueTime: string | null = null;
+  let timeContext: string | null = null;
+  let needsReminder = false;
+
+  // Reminder signals
+  if (/remind me|don't forget|before |after work/.test(l)) needsReminder = true;
+
+  // Time of day
+  if (/\bmorning\b/.test(l)) dueTime = "morning";
+  else if (/\bafternoon\b/.test(l)) dueTime = "afternoon";
+  else if (/\bevening\b|\btonight\b/.test(l)) dueTime = "evening";
+  else if (/\bnight\b/.test(l)) dueTime = "night";
+
+  // Special contexts (before_X / after_X)
+  const beforeMatch = l.match(/before\s+(dance|gym|class|work|lunch|dinner|meeting)/);
+  if (beforeMatch) {
+    timeContext = `before_${beforeMatch[1]}`;
+    needsReminder = true;
+  }
+  if (/after\s+work/.test(l)) {
+    timeContext = "after_work";
+    needsReminder = true;
+  }
+
+  // Dates
+  if (/\btonight\b/.test(l)) {
+    dueDate = dateISO(0);
+    timeContext = timeContext ?? "tonight";
+  } else if (/\btoday\b|\bthis morning\b|\bthis afternoon\b|\bthis evening\b/.test(l)) {
+    dueDate = dateISO(0);
+  } else if (/\btomorrow\b/.test(l)) {
+    dueDate = dateISO(1);
+  } else if (/this weekend|weekend/.test(l)) {
+    dueDate = nextWeekday(6); // Saturday
+    timeContext = timeContext ?? "this_weekend";
+  } else if (/next monday|monday/.test(l)) dueDate = nextWeekday(1);
+  else if (/next tuesday|tuesday/.test(l)) dueDate = nextWeekday(2);
+  else if (/next wednesday|wednesday/.test(l)) dueDate = nextWeekday(3);
+  else if (/next thursday|thursday/.test(l)) dueDate = nextWeekday(4);
+  else if (/next friday|friday/.test(l)) dueDate = nextWeekday(5);
+
+  return { dueDate, dueTime, timeContext, needsReminder };
+}
+
+// ── Priority extraction ───────────────────────────────────────────────────────
+
+type Level = "LOW" | "MEDIUM" | "HIGH";
+
+interface PriorityInfo {
+  urgency: Level;
+  importance: Level;
+  energyRequired: Level;
+}
+
+function extractPriority(sentence: string, timeInfo: TimeInfo): PriorityInfo {
+  const l = sentence.toLowerCase();
+
+  // Urgency
+  let urgency: Level = "MEDIUM";
+  if (/urgent|asap|immediately|right now|tonight|today/.test(l) || timeInfo.dueDate === dateISO(0)) {
+    urgency = "HIGH";
+  } else if (/someday|eventually|whenever|no rush|low priority/.test(l)) {
+    urgency = "LOW";
+  }
+
+  // Importance
+  let importance: Level = "MEDIUM";
+  if (/important|critical|must|have to|need to|required|essential/.test(l)) {
+    importance = "HIGH";
+  } else if (/maybe|possibly|might|could|idea|thinking/.test(l)) {
+    importance = "LOW";
+  }
+
+  // Energy required
+  let energyRequired: Level = "MEDIUM";
+  if (/\bquick\b|\beasy\b|\bjust\b|\bsimple\b|\bsmall\b|\bcall\b|\btext\b|\bbuy\b/.test(l)) {
+    energyRequired = "LOW";
+  } else if (/\bbig\b|\bcomplex\b|\bhard\b|\bdifficult\b|\bmajor\b|\bproject\b/.test(l)) {
+    energyRequired = "HIGH";
+  }
+
+  return { urgency, importance, energyRequired };
+}
+
+// ── Field extractors ──────────────────────────────────────────────────────────
 
 function extractHealthStatus(text: string): string | undefined {
   for (const sentence of splitSentences(text)) {
@@ -68,9 +168,7 @@ function extractTasks(text: string): TaskOutput[] {
   const seen = new Set<string>();
 
   for (const sentence of sentences) {
-    const lower = sentence.toLowerCase();
-    const isTomorrow = lower.includes("tomorrow");
-    const dueDate = isTomorrow ? getTomorrow() : null;
+    const timeInfo = extractTimeInfo(sentence);
 
     const triggerMatch = sentence.match(
       /(?:need to|have to|must|should|want to|going to|plan to|will|got to)\s+(.+)/i,
@@ -82,7 +180,16 @@ function extractTasks(text: string): TaskOutput[] {
         const title = capitalize(part.trim());
         if (title.length < 3 || title.length > 150 || seen.has(title.toLowerCase())) continue;
         seen.add(title.toLowerCase());
-        tasks.push({ title, description: "", priority: "MEDIUM", dueDate, projectName: null, confidence: "high" });
+        const priority = extractPriority(sentence, timeInfo);
+        tasks.push({
+          title,
+          description: "",
+          priority: "MEDIUM",
+          ...timeInfo,
+          ...priority,
+          projectName: null,
+          confidence: "high",
+        });
       }
       continue;
     }
@@ -95,7 +202,16 @@ function extractTasks(text: string): TaskOutput[] {
       const key = title.toLowerCase();
       if (title.length >= 3 && title.length <= 150 && !seen.has(key)) {
         seen.add(key);
-        tasks.push({ title, description: "", priority: "MEDIUM", dueDate, projectName: null, confidence: "medium" });
+        const priority = extractPriority(sentence, timeInfo);
+        tasks.push({
+          title,
+          description: "",
+          priority: "MEDIUM",
+          ...timeInfo,
+          ...priority,
+          projectName: null,
+          confidence: "medium",
+        });
       }
     }
   }
@@ -172,30 +288,30 @@ function buildReflection(
   if (tasks.length > 0) found.push(`${tasks.length} task${tasks.length !== 1 ? "s" : ""}`);
   if (ideas.length > 0) found.push(`${ideas.length} idea${ideas.length !== 1 ? "s" : ""}`);
   if (habits.length > 0) found.push(`${habits.length} habit${habits.length !== 1 ? "s" : ""}`);
+  if (found.length > 0) parts.push(`I found ${found.join(", ")}.`);
 
-  if (found.length > 0) {
-    parts.push(`I found ${found.join(", ")}.`);
+  const urgentToday = tasks.filter((t) => t.dueDate === dateISO(0) || t.urgency === "HIGH");
+  if (urgentToday.length > 0) {
+    parts.push(`Focus on ${urgentToday.map((t) => t.title.toLowerCase()).slice(0, 2).join(" and ")} first.`);
   }
 
-  const tomorrowTasks = tasks.filter((t) => t.dueDate === getTomorrow());
-  if (tomorrowTasks.length > 0) {
-    parts.push(
-      `For tomorrow, focus on: ${tomorrowTasks.map((t) => t.title.toLowerCase()).join(" and ")}.`,
-    );
+  const tomorrowTasks = tasks.filter((t) => t.dueDate === dateISO(1));
+  if (tomorrowTasks.length > 0 && urgentToday.length === 0) {
+    parts.push(`For tomorrow: ${tomorrowTasks.map((t) => t.title.toLowerCase()).join(" and ")}.`);
   }
 
   if (healthStatus && habits.some((h) => !h.completed)) {
     parts.push("Rest is the priority — everything else can wait.");
   }
 
-  return parts.join(" ") || "Capture processed. Review what was found below.";
+  return parts.join(" ") || "Capture processed.";
 }
 
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export const mockProvider: AIProvider = {
   async organizeCapture(input: string): Promise<CaptureResult> {
-    await new Promise((r) => setTimeout(r, 700)); // simulate latency
+    await new Promise((r) => setTimeout(r, 600));
 
     const healthStatus = extractHealthStatus(input);
     const mood = extractMood(input, healthStatus);
@@ -204,7 +320,7 @@ export const mockProvider: AIProvider = {
     const habits = extractHabits(input, healthStatus);
 
     const improveTomorrow = tasks
-      .filter((t) => t.dueDate === getTomorrow())
+      .filter((t) => t.dueDate === dateISO(1))
       .map((t) => t.title)
       .join(", ");
 
@@ -220,9 +336,7 @@ export const mockProvider: AIProvider = {
       tasks.length > 0 && `${tasks.length} task${tasks.length !== 1 ? "s" : ""} identified`,
       ideas.length > 0 && `${ideas.length} idea${ideas.length !== 1 ? "s" : ""} captured`,
       habits.length > 0 && `${habits.length} habit${habits.length !== 1 ? "s" : ""} tracked`,
-    ]
-      .filter(Boolean)
-      .join(". ");
+    ].filter(Boolean).join(". ");
 
     return {
       reflection: buildReflection(tasks, ideas, habits, healthStatus, mood),

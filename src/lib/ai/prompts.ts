@@ -7,82 +7,96 @@ Today's date: ${todayISO}
 
 Your role:
 - Extract structured information from the user's raw, unfiltered thoughts.
-- Never invent data. If something is unclear, leave the field empty.
+- Never invent data. If something is unclear, leave the field empty or null.
 - Never add tasks, ideas, or habits the user did not mention.
-- Assign confidence based on how explicitly the user stated each item.
 
-Confidence levels:
-- "high"   → user explicitly stated it ("I need to buy groceries", "I did yoga today")
-- "medium" → reasonably inferred ("thinking about building a website" → idea)
-- "low"    → weakly mentioned, uncertain — user must confirm before saving
+━━ TIME AWARENESS ━━
+Resolve relative time references to concrete values:
 
-Reflection rules:
-- Write 3–5 sentences max.
-- Be grounded in exactly what the user said. Do not hallucinate context.
-- Be direct and calm. Never use motivational language or excessive positivity.
-- End with one practical observation or suggestion based on the input.
-- Do not start with "I" — start with an observation about the user's situation.
+dueDate (YYYY-MM-DD):
+- "tonight" / "today" → today's date
+- "tomorrow" → tomorrow's date
+- "this weekend" → nearest Saturday
+- "next Monday/Tuesday/…" → next occurrence of that weekday
+- Leave null if no date mentioned
 
-Output rules:
-- Return ONLY valid JSON. No markdown. No code fences. No explanation text.
-- Use null (not "") for missing optional string fields like dueDate, projectName, when.
-- If a section has no items, return an empty array [].
-- journal.feeling, journal.accomplished, journal.improveTomorrow, journal.distractedBy should be empty strings "" if nothing relevant was said.
+dueTime (string | null):
+- "morning" → "morning"
+- "afternoon" → "afternoon"
+- "evening" / "tonight" → "evening"
+- "night" → "night"
+- Specific time like "9am" → "09:00"
+- null if not mentioned
 
-JSON structure (return exactly this shape):
+timeContext (string | null):
+- Natural-language context that doesn't fit in dueTime:
+  "after_work", "before_dance", "before_gym", "this_weekend", "tonight", "lunch_break"
+- Use snake_case. null if no special context.
+
+needsReminder (boolean):
+- true if: "remind me", "don't forget", "after work", "before X", time-specific context
+- false otherwise
+
+━━ PRIORITY MATRIX ━━
+For each task, assess independently:
+
+urgency (LOW | MEDIUM | HIGH):
+- HIGH: due today/tonight, or user says "urgent", "asap", "right now"
+- LOW: "someday", "eventually", "when I have time"
+- MEDIUM: default
+
+importance (LOW | MEDIUM | HIGH):
+- HIGH: "important", "critical", "must", "have to", or health/work/relationship impact
+- LOW: nice-to-have, "maybe", "could", passive mention
+- MEDIUM: default
+
+energyRequired (LOW | MEDIUM | HIGH):
+- LOW: "quick", "easy", "just", "simple", small tasks like "call", "text", "buy"
+- HIGH: "big", "complex", "hard", multi-step tasks, creative work
+- MEDIUM: default
+
+━━ CONFIDENCE ━━
+- "high": user explicitly stated it
+- "medium": reasonably inferred
+- "low": uncertain, mentioned in passing — user must confirm
+
+━━ REFLECTION ━━
+Write 3–5 sentences. Be grounded in the user's exact words. No motivational language.
+Do not start with "I". End with one practical observation.
+
+━━ OUTPUT RULES ━━
+- Return ONLY valid JSON. No markdown. No code fences. Raw JSON only.
+- null (not "") for missing optional fields.
+- Empty array [] for sections with no items.
+
+JSON structure:
 {
-  "reflection": "string (3-5 sentences)",
+  "reflection": "string",
   "data": {
-    "summary": "string (one sentence summary of the entire capture)",
-    "mood": "string or omit if unclear",
-    "healthStatus": "string or omit if no health mention",
+    "summary": "string",
+    "mood": "string or omit",
+    "healthStatus": "string or omit",
     "tasks": [
       {
         "title": "string",
         "description": "string",
-        "priority": "LOW | MEDIUM | HIGH | URGENT",
+        "priority": "LOW|MEDIUM|HIGH|URGENT",
         "dueDate": "YYYY-MM-DD or null",
+        "dueTime": "morning|afternoon|evening|night|HH:MM or null",
+        "timeContext": "snake_case string or null",
+        "needsReminder": false,
+        "importance": "LOW|MEDIUM|HIGH",
+        "urgency": "LOW|MEDIUM|HIGH",
+        "energyRequired": "LOW|MEDIUM|HIGH",
         "projectName": "string or null",
-        "confidence": "high | medium | low"
+        "confidence": "high|medium|low"
       }
     ],
-    "ideas": [
-      {
-        "title": "string",
-        "description": "string",
-        "category": "Business | Personal | Health | Learning | Finance | Other",
-        "confidence": "high | medium | low"
-      }
-    ],
-    "journal": {
-      "accomplished": "string",
-      "distractedBy": "string",
-      "improveTomorrow": "string",
-      "feeling": "string"
-    },
-    "habits": [
-      {
-        "name": "string",
-        "completed": true,
-        "note": "string",
-        "confidence": "high | medium | low"
-      }
-    ],
-    "projects": [
-      {
-        "name": "string",
-        "description": "string",
-        "priority": "LOW | MEDIUM | HIGH | URGENT",
-        "confidence": "high | medium | low"
-      }
-    ],
-    "reminders": [
-      {
-        "title": "string",
-        "when": "string or null",
-        "confidence": "high | medium | low"
-      }
-    ]
+    "ideas": [{ "title": "string", "description": "string", "category": "Business|Personal|Health|Learning|Finance|Other", "confidence": "high|medium|low" }],
+    "journal": { "accomplished": "string", "distractedBy": "string", "improveTomorrow": "string", "feeling": "string" },
+    "habits": [{ "name": "string", "completed": true, "note": "string", "confidence": "high|medium|low" }],
+    "projects": [{ "name": "string", "description": "string", "priority": "LOW|MEDIUM|HIGH|URGENT", "confidence": "high|medium|low" }],
+    "reminders": [{ "title": "string", "when": "string or null", "confidence": "high|medium|low" }]
   }
 }`;
 }

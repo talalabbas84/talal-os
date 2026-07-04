@@ -13,6 +13,7 @@ import type {
   Priority,
   TaskStatus,
   Frequency,
+  Level,
 } from "@prisma/client";
 
 export type {
@@ -30,6 +31,7 @@ export type {
   Priority,
   TaskStatus,
   Frequency,
+  Level,
 };
 
 export type TaskWithProject = Prisma.TaskGetPayload<{

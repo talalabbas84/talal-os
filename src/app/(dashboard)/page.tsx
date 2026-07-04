@@ -1,4 +1,4 @@
-import { getTodayTasks } from "@/features/tasks/actions/task.actions";
+import { getTodayTasks, getTopTasks } from "@/features/tasks/actions/task.actions";
 import { getProjects } from "@/features/projects/actions/project.actions";
 import { getInboxEntries } from "@/features/inbox/actions/inbox.actions";
 import { getTodayHabits } from "@/features/habits/actions/habit.actions";
@@ -6,12 +6,14 @@ import { DashboardTaskList } from "@/features/dashboard/components/dashboard-tas
 import { DashboardProjectList } from "@/features/dashboard/components/dashboard-project-list";
 import { DashboardInboxList } from "@/features/dashboard/components/dashboard-inbox-list";
 import { DashboardHabitList } from "@/features/dashboard/components/dashboard-habit-list";
+import { DashboardTopTasks } from "@/features/dashboard/components/dashboard-top-tasks";
 import { QuickAdd } from "@/features/dashboard/components/quick-add";
 
 export default async function DashboardPage() {
-  const [todayTasks, activeProjects, recentInbox, todayHabits] =
+  const [todayTasks, topTasks, activeProjects, recentInbox, todayHabits] =
     await Promise.all([
       getTodayTasks(),
+      getTopTasks(3),
       getProjects("ACTIVE"),
       getInboxEntries("PENDING"),
       getTodayHabits(),
@@ -25,6 +27,8 @@ export default async function DashboardPage() {
         </h1>
         <QuickAdd />
       </div>
+
+      <DashboardTopTasks tasks={topTasks} />
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <DashboardTaskList tasks={todayTasks} />

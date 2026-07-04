@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAIProvider } from "@/lib/ai/provider";
 import { saveCaptureSchema } from "../lib/schema";
+import { computePriorityScore } from "@/utils/priority";
 import type { ActionResult } from "@/types";
 import type { CaptureResult } from "@/lib/ai/types";
 
@@ -51,10 +52,7 @@ export async function saveCapture(
     const userId = await requireUserId();
     const parsed = saveCaptureSchema.safeParse(rawInput);
     if (!parsed.success) {
-      return {
-        success: false,
-        error: parsed.error.issues[0]?.message ?? "Invalid input.",
-      };
+      return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
     }
 
     const { tasks, ideas, habits, projects, reminders, journal, saveJournal } = parsed.data;
@@ -68,45 +66,48 @@ export async function saveCapture(
     let habitsUpdated = 0;
     let projectsCreated = 0;
 
-    // 1. Projects (confirmed by user — they arrive pre-filtered)
-    const createdProjectMap: Record<string, string> = {};
+    // 1. Projects (user explicitly opted-in)
+    const projectMap: Record<string, string> = {};
     for (const proj of projects) {
-      // Avoid creating a project that already exists
       const existing = await prisma.project.findFirst({
         where: { userId, name: { equals: proj.name, mode: "insensitive" } },
       });
       if (existing) {
-        createdProjectMap[proj.name.toLowerCase()] = existing.id;
+        projectMap[proj.name.toLowerCase()] = existing.id;
         continue;
       }
       const created = await prisma.project.create({
-        data: {
-          name: proj.name,
-          description: proj.description || null,
-          priority: proj.priority,
-          userId,
-        },
+        data: { name: proj.name, description: proj.description || null, priority: proj.priority, userId },
       });
-      createdProjectMap[proj.name.toLowerCase()] = created.id;
+      projectMap[proj.name.toLowerCase()] = created.id;
       projectsCreated++;
     }
 
-    // 2. Tasks
+    // 2. Tasks — save all new metadata fields + compute score
     for (const task of tasks) {
       let projectId: string | null = null;
       if (task.projectName) {
         const existing = await prisma.project.findFirst({
           where: { userId, name: { equals: task.projectName, mode: "insensitive" } },
         });
-        projectId =
-          existing?.id ?? createdProjectMap[task.projectName.toLowerCase()] ?? null;
+        projectId = existing?.id ?? projectMap[task.projectName.toLowerCase()] ?? null;
       }
+
+      const score = computePriorityScore(task.urgency, task.importance, task.energyRequired);
+
       await prisma.task.create({
         data: {
           title: task.title,
           description: task.description || null,
           priority: task.priority,
           dueDate: task.dueDate ? new Date(task.dueDate + "T00:00:00.000Z") : null,
+          dueTime: task.dueTime ?? null,
+          timeContext: task.timeContext ?? null,
+          needsReminder: task.needsReminder,
+          importance: task.importance,
+          urgency: task.urgency,
+          energyRequired: task.energyRequired,
+          priorityScore: score,
           userId,
           projectId,
         },
@@ -114,20 +115,15 @@ export async function saveCapture(
       tasksCreated++;
     }
 
-    // 3. Ideas → Inbox (IDEA category)
+    // 3. Ideas → Inbox
     for (const idea of ideas) {
       await prisma.inboxEntry.create({
-        data: {
-          title: idea.title,
-          description: idea.description || null,
-          category: "IDEA",
-          userId,
-        },
+        data: { title: idea.title, description: idea.description || null, category: "IDEA", userId },
       });
       ideasCreated++;
     }
 
-    // 4. Reminders → Inbox (TASK category, as a lightweight capture)
+    // 4. Reminders → Inbox
     for (const reminder of reminders) {
       await prisma.inboxEntry.create({
         data: {
@@ -148,8 +144,7 @@ export async function saveCapture(
         await prisma.dailyLog.upsert({
           where: { userId_date: { userId, date: today } },
           create: {
-            userId,
-            date: today,
+            userId, date: today,
             feeling: feeling || null,
             accomplished: accomplished || null,
             distracted: distractedBy || null,
@@ -166,11 +161,9 @@ export async function saveCapture(
       }
     }
 
-    // 6. Habits — match by name, record completion only for completed=true
+    // 6. Habits — match by name, record completion for today
     if (habits.length > 0) {
-      const userHabits = await prisma.habit.findMany({
-        where: { userId, isActive: true },
-      });
+      const userHabits = await prisma.habit.findMany({ where: { userId, isActive: true } });
       for (const captured of habits) {
         if (!captured.completed) continue;
         const match = userHabits.find(
@@ -181,9 +174,7 @@ export async function saveCapture(
           where: { habitId_date: { habitId: match.id, date: today } },
         });
         if (!existing) {
-          await prisma.habitCompletion.create({
-            data: { habitId: match.id, date: today },
-          });
+          await prisma.habitCompletion.create({ data: { habitId: match.id, date: today } });
           habitsUpdated++;
         }
       }
@@ -196,17 +187,7 @@ export async function saveCapture(
     revalidatePath("/projects");
     revalidatePath("/");
 
-    return {
-      success: true,
-      data: {
-        tasksCreated,
-        ideasCreated,
-        remindersCreated,
-        journalSaved,
-        habitsUpdated,
-        projectsCreated,
-      },
-    };
+    return { success: true, data: { tasksCreated, ideasCreated, remindersCreated, journalSaved, habitsUpdated, projectsCreated } };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };
   }

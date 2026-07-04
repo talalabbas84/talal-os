@@ -65,6 +65,21 @@ model Task {
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
 
+  // Time awareness
+  dueTime     String?   // "morning" | "afternoon" | "evening" | "night"
+  timeContext String?   // "tonight" | "after_work" | "this_weekend" | "before_dance" …
+
+  // Reminder intent (notifications built in v0.5+)
+  needsReminder   Boolean   @default(false)
+  reminderAt      DateTime?
+  sourceCaptureId String?
+
+  // Priority matrix
+  importance     Level @default(MEDIUM)
+  urgency        Level @default(MEDIUM)
+  energyRequired Level @default(MEDIUM)
+  priorityScore  Int?  // urgency + importance - energy penalty (0–6)
+
   userId    String
   user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   projectId String?
@@ -74,6 +89,8 @@ model Task {
   @@index([status])
   @@index([dueDate])
   @@index([projectId])
+  @@index([priorityScore])
+  @@index([urgency])
 }
 
 model DailyLog {
@@ -167,4 +184,10 @@ enum TaskStatus {
 enum Frequency {
   DAILY
   WEEKLY
+}
+
+enum Level {
+  LOW
+  MEDIUM
+  HIGH
 }

@@ -1,6 +1,7 @@
 # Talal OS — Roadmap
 
-## v0.2 — AI Capture ✅ (current)
+## v0.2 — AI Capture ✅
+
 Natural language capture. Type messy thoughts; the app organizes them into tasks, ideas, journal entries, and habit notes automatically.
 
 - `/capture` page as the primary entry point
@@ -8,43 +9,85 @@ Natural language capture. Type messy thoughts; the app organizes them into tasks
 - Structured preview before saving
 - Tasks, inbox ideas, daily log, and habit completions all saved in one click
 
+## v0.3 — Real AI Integration ✅
+
+Production-quality AI pipeline with Gemini.
+
+- `AIProvider` interface with factory pattern (`AI_PROVIDER` env var)
+- Real Gemini integration (`gemini-2.0-flash`) with JSON mode
+- Zod validation + repair prompt retry on schema mismatch
+- Confidence system (high/medium/low) — low items excluded by default
+- Dedicated `prompts.ts` with grounded reflection (no motivational fluff)
+
+## v0.4 — Smart Capture Metadata ✅
+
+Time awareness and priority matrix built into every captured task.
+
+- Time extraction: dueDate, dueTime (morning/evening), timeContext (after_work/tonight)
+- Reminder detection: needsReminder flag + reminderAt stored in DB
+- Priority matrix: urgency × importance − energy penalty → priorityScore (0–6)
+- Today's Top 3 on dashboard: due today OR high urgency/importance, sorted by score
+
 ---
 
-## v0.3 — Daily Focus
-A single-screen morning view showing today's tasks, habits due, and one intention for the day. Replaces the need to navigate across multiple pages for the daily routine.
+## v0.5 — Email Reminders
 
-## v0.4 — PWA Install Support
-Add a web app manifest and install prompt so Talal can add the app to his home screen. This removes the friction of opening a browser — the app feels native and is one tap away.
+Send a daily digest email with Today's Top 3 and any habits due.
 
-> Note: PWA support will help Talal remember to open the app without relying on browser bookmarks.
+- Nodemailer or Resend integration
+- Cron job (or Vercel cron) at 8 AM local time
+- Unsubscribe link in footer
+- Uses `needsReminder` and `reminderAt` fields already captured
 
-## v0.5 — Push Notifications
-Browser push notifications for:
-- **Morning check-in** — reminder to open the app and set an intention for the day
-- **Evening review** — reminder to fill in the daily log
-- **Recovery reminders** — gentle nudge on rest days (e.g. "You mentioned being sick — take it easy today")
+## v0.6 — PWA Install
 
-> Note: Requires v0.4 (PWA) to be in place first.
+Add a web app manifest and service worker so Talal can install the app from the browser.
 
-## v0.6 — Speech-to-Text Capture
-Allow Talal to speak instead of type. The spoken text goes through the same AI capture pipeline and gets organized automatically.
+- `manifest.json` with icon set (192, 512px)
+- `next-pwa` or custom service worker
+- Install prompt banner on first visit
+- Offline fallback page for when there's no connection
 
-> Note: Speech-to-text should let Talal speak messy thoughts — same experience as typing, but hands-free. Useful for capturing ideas on the go.
+## v0.7 — Push Notifications
 
-## v0.7 — Notion Sync
-Two-way sync with a Notion database for tasks and projects. Useful for sharing context with others or using Notion as a secondary view.
+Browser push for time-sensitive reminders already captured via AI.
 
-## v0.8 — AI Weekly Review
-At the end of each week, automatically generate a summary of:
-- Tasks completed vs planned
-- Habits consistency
-- Mood and health patterns from the daily log
-- One recommendation for next week
+- Web Push API + VAPID keys stored in env
+- Service worker receives push, shows notification
+- Subscribes on install (v0.6 prerequisite)
+- Sends notification at `reminderAt` time for tasks with `needsReminder: true`
+- Evening review nudge at 9 PM if daily log is empty
+
+## v0.8 — Calendar Sync
+
+Export tasks with due dates to Google Calendar or iCal.
+
+- `/api/calendar/ical` endpoint — returns `.ics` feed Talal can subscribe to
+- Google Calendar OAuth flow (optional — subscribe link is simpler)
+- Only tasks with `dueDate` are included; `dueTime` mapped to event time
+
+## v0.9 — AI Reprioritization
+
+Once a week (or on demand), re-score all open tasks based on what's changed.
+
+- "Reprioritize" button on the task list
+- Sends all open task titles + current scores to AI
+- AI returns updated urgency/importance/energy for each
+- Diff shown as a preview before applying
+
+## v1.0 — Daily Planning Agent
+
+Morning planning session that picks Today's Top 3 and sets a single intention.
+
+- `/plan` page: shows yesterday's incomplete tasks + today's habits
+- AI suggests which 3 tasks to focus on and why
+- User confirms or swaps; confirmed tasks pinned as Top 3
+- Optional: voice input for the daily intention
 
 ---
 
 ## Principles for all future versions
 
-- **One recommended action at a time** — Talal gets overwhelmed by too many choices. Every screen should make the right next step obvious.
+- **One recommended action at a time** — every screen should make the right next step obvious.
 - **No feature creep** — only build what removes a real pain point. Complexity is the enemy.
-- **Offline-first where possible** — the app should work without internet for capture and review.
+- **Offline-first where possible** — capture and review should work without internet.

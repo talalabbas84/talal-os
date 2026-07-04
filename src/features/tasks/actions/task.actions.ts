@@ -112,6 +112,32 @@ export async function getTasks(
   });
 }
 
+export async function getTopTasks(limit = 3): Promise<TaskWithProject[]> {
+  const userId = await requireUserId();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  return prisma.task.findMany({
+    where: {
+      userId,
+      status: { not: "DONE" },
+      OR: [
+        { dueDate: { gte: today, lt: tomorrow } },
+        { urgency: "HIGH" },
+        { importance: "HIGH" },
+      ],
+    },
+    orderBy: [
+      { priorityScore: { sort: "desc", nulls: "last" } },
+      { dueDate: { sort: "asc", nulls: "last" } },
+    ],
+    take: limit,
+    include: { project: true },
+  });
+}
+
 export async function getTodayTasks(): Promise<TaskWithProject[]> {
   const userId = await requireUserId();
   const today = new Date();

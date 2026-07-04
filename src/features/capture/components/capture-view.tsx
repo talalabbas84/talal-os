@@ -609,25 +609,83 @@ function ItemRow({
   );
 }
 
-const PRIORITY_COLORS: Record<string, string> = {
-  LOW: "text-neutral-400",
-  MEDIUM: "text-blue-500",
-  HIGH: "text-orange-500",
-  URGENT: "text-red-500",
+const URGENCY_COLORS: Record<string, string> = {
+  LOW: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
+  MEDIUM: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400",
+  HIGH: "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400",
+};
+
+const IMPORTANCE_COLORS: Record<string, string> = {
+  LOW: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
+  MEDIUM: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
+  HIGH: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
+};
+
+const ENERGY_COLORS: Record<string, string> = {
+  LOW: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400",
+  MEDIUM: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
+  HIGH: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400",
 };
 
 function TaskCard({ task }: { task: TaskOutput }) {
+  const hasTimeContext = task.dueDate || task.dueTime || task.timeContext;
+  const timeLabel = [
+    task.dueDate && formatDate(task.dueDate),
+    task.dueTime,
+    !task.dueDate && task.timeContext && task.timeContext.replace(/_/g, " "),
+  ].filter(Boolean).join(" · ");
+
   return (
-    <div>
-      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{task.title}</p>
-      <p className="mt-0.5 text-xs text-neutral-400">
-        <span className={PRIORITY_COLORS[task.priority] ?? "text-neutral-400"}>
-          {task.priority}
-        </span>
-        {task.dueDate && ` · ${formatDate(task.dueDate)}`}
-        {task.projectName && ` · ${task.projectName}`}
-      </p>
+    <div className="space-y-1.5">
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{task.title}</p>
+        {task.needsReminder && (
+          <span className="shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950 dark:text-blue-400">
+            🔔 reminder
+          </span>
+        )}
+      </div>
+
+      {hasTimeContext && (
+        <p className="text-xs text-neutral-400">{timeLabel}</p>
+      )}
+
+      <div className="flex flex-wrap gap-1">
+        <MetaBadge label="U" value={task.urgency} colors={URGENCY_COLORS} title="Urgency" />
+        <MetaBadge label="I" value={task.importance} colors={IMPORTANCE_COLORS} title="Importance" />
+        <MetaBadge label="E" value={task.energyRequired} colors={ENERGY_COLORS} title="Energy" />
+        {task.projectName && (
+          <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">
+            {task.projectName}
+          </span>
+        )}
+      </div>
     </div>
+  );
+}
+
+function MetaBadge({
+  label,
+  value,
+  colors,
+  title,
+}: {
+  label: string;
+  value: string;
+  colors: Record<string, string>;
+  title: string;
+}) {
+  if (value === "MEDIUM") return null; // only show non-default values to reduce noise
+  return (
+    <span
+      title={`${title}: ${value}`}
+      className={cn(
+        "rounded-full px-1.5 py-0.5 text-[10px] font-medium",
+        colors[value] ?? "bg-neutral-100 text-neutral-500",
+      )}
+    >
+      {label}:{value[0]}
+    </span>
   );
 }
 
