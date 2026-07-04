@@ -1,0 +1,170 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  password  String
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  inboxEntries InboxEntry[]
+  projects     Project[]
+  tasks        Task[]
+  dailyLogs    DailyLog[]
+  habits       Habit[]
+}
+
+model InboxEntry {
+  id          String         @id @default(cuid())
+  title       String
+  description String?
+  category    InboxCategory?
+  status      InboxStatus    @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Project {
+  id          String        @id @default(cuid())
+  name        String
+  description String?
+  status      ProjectStatus @default(ACTIVE)
+  priority    Priority      @default(MEDIUM)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tasks  Task[]
+
+  @@index([userId])
+  @@index([status])
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?
+  status      TaskStatus @default(TODO)
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([projectId])
+}
+
+model DailyLog {
+  id           String   @id @default(cuid())
+  date         DateTime @db.Date
+  feeling      String?
+  accomplished String?
+  distracted   String?
+  improve      String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model Habit {
+  id          String    @id @default(cuid())
+  name        String
+  description String?
+  frequency   Frequency @default(DAILY)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  userId      String
+  user        User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  completions HabitCompletion[]
+
+  @@index([userId])
+  @@index([isActive])
+}
+
+model HabitCompletion {
+  id        String   @id @default(cuid())
+  date      DateTime @db.Date
+  createdAt DateTime @default(now())
+
+  habitId String
+  habit   Habit  @relation(fields: [habitId], references: [id], onDelete: Cascade)
+
+  @@unique([habitId, date])
+  @@index([habitId])
+  @@index([date])
+}
+
+enum InboxCategory {
+  IDEA
+  TASK
+  PROJECT
+  GOAL
+  JOURNAL
+  LEARNING
+  FINANCE
+  HEALTH
+  DANCE
+  BUSINESS
+  PERSONAL
+}
+
+enum InboxStatus {
+  PENDING
+  PROCESSED
+  ARCHIVED
+}
+
+enum ProjectStatus {
+  ACTIVE
+  BACKLOG
+  PAUSED
+  COMPLETED
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Frequency {
+  DAILY
+  WEEKLY
+}

@@ -1,0 +1,16 @@
+services:
+  db:
+    image: postgres:16
+    container_name: talal-os-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: talal_os
+      POSTGRES_PASSWORD: talal_os_password
+      POSTGRES_DB: talal_os
+    ports:
+      - "5433:5432"
+    volumes:
+      - talal_os_pgdata:/var/lib/postgresql/data
+
+volumes:
+  talal_os_pgdata:
