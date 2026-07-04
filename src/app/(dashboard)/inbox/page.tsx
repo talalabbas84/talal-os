@@ -7,7 +7,6 @@ export default async function InboxPage() {
 
   const pending = entries.filter((e) => e.status === "PENDING");
   const processed = entries.filter((e) => e.status === "PROCESSED");
-  const archived = entries.filter((e) => e.status === "ARCHIVED");
 
   return (
     <div className="space-y-6">

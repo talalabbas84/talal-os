@@ -9,7 +9,6 @@ import {
 } from "@/features/habits/actions/habit.actions";
 import { HabitDialog } from "./habit-dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/utils/cn";
 import type { HabitWithCompletions } from "@/types";
 

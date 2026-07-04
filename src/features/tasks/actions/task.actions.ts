@@ -101,7 +101,9 @@ export async function deleteTask(id: string): Promise<ActionResult> {
   }
 }
 
-export async function getTasks(status?: TaskStatus) {
+export async function getTasks(
+  status?: TaskStatus,
+): Promise<TaskWithProject[]> {
   const userId = await requireUserId();
   return prisma.task.findMany({
     where: { userId, ...(status ? { status } : {}) },

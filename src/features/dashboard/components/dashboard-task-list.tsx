@@ -4,7 +4,6 @@ import Link from "next/link";
 import { useState, useTransition } from "react";
 import { CheckSquare, ArrowRight } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { updateTaskStatus } from "@/features/tasks/actions/task.actions";
 import { cn } from "@/utils/cn";
 import type { TaskWithProject } from "@/types";

@@ -1,13 +1,9 @@
 import { getTasks } from "@/features/tasks/actions/task.actions";
-import { getProjects } from "@/features/projects/actions/project.actions";
 import { TaskListView } from "@/features/tasks/components/task-list-view";
 import { TaskDialog } from "@/features/tasks/components/task-dialog";
 
 export default async function TasksPage() {
-  const [tasks, projects] = await Promise.all([
-    getTasks(),
-    getProjects("ACTIVE"),
-  ]);
+  const tasks = await getTasks();
 
   return (
     <div className="space-y-6">

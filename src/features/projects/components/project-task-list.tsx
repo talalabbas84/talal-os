@@ -8,7 +8,6 @@ import {
 } from "@/features/tasks/actions/task.actions";
 import { TaskDialog } from "@/features/tasks/components/task-dialog";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 import { formatDateShort } from "@/utils/date";
 import { cn } from "@/utils/cn";
 import type { Task, TaskStatus } from "@/types";
@@ -112,10 +111,8 @@ function TaskRow({ task }: { task: Task }) {
 
 export function ProjectTaskList({
   tasks,
-  projectId,
 }: {
   tasks: Task[];
-  projectId: string;
 }) {
   const [filter, setFilter] = useState<TaskStatus | "ALL">("ALL");
 

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { MoreHorizontal, Pencil, Trash2, Archive, Check } from "lucide-react";
+import { Pencil, Trash2, Archive, Check } from "lucide-react";
 import {
   deleteInboxEntry,
   updateInboxStatus,
 } from "@/features/inbox/actions/inbox.actions";
 import { InboxEntryDialog } from "./inbox-entry-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateShort } from "@/utils/date";
 import type { InboxEntry, InboxStatus } from "@/types";

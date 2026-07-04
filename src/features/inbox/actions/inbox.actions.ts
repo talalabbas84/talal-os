@@ -93,7 +93,9 @@ export async function deleteInboxEntry(id: string): Promise<ActionResult> {
   }
 }
 
-export async function getInboxEntries(status?: InboxStatus) {
+export async function getInboxEntries(
+  status?: InboxStatus,
+): Promise<InboxEntry[]> {
   const userId = await requireUserId();
   return prisma.inboxEntry.findMany({
     where: { userId, ...(status ? { status } : {}) },

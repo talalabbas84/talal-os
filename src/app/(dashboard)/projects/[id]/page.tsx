@@ -66,7 +66,7 @@ export default async function ProjectDetailPage({
         </div>
       </div>
 
-      <ProjectTaskList tasks={project.tasks} projectId={project.id} />
+      <ProjectTaskList tasks={project.tasks} />
     </div>
   );
 }

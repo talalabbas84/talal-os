@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { ArrowRight, Inbox } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { formatDateShort } from "@/utils/date";
 import type { InboxEntry } from "@/types";
 

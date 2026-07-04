@@ -4,7 +4,10 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { projectSchema } from "../lib/schema";
-import type { ActionResult, Project, ProjectStatus } from "@/types";
+import type { ActionResult, Project, ProjectStatus, Task } from "@/types";
+
+type ProjectWithTaskCount = Project & { _count: { tasks: number } };
+type ProjectWithTasks = Project & { tasks: Task[] };
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -90,7 +93,9 @@ export async function deleteProject(id: string): Promise<ActionResult> {
   }
 }
 
-export async function getProjects(status?: ProjectStatus) {
+export async function getProjects(
+  status?: ProjectStatus,
+): Promise<ProjectWithTaskCount[]> {
   const userId = await requireUserId();
   return prisma.project.findMany({
     where: { userId, ...(status ? { status } : {}) },
@@ -99,7 +104,7 @@ export async function getProjects(status?: ProjectStatus) {
   });
 }
 
-export async function getProject(id: string) {
+export async function getProject(id: string): Promise<ProjectWithTasks | null> {
   const userId = await requireUserId();
   return prisma.project.findUnique({
     where: { id, userId },

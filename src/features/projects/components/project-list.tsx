@@ -8,7 +8,6 @@ import {
   updateProjectStatus,
 } from "@/features/projects/actions/project.actions";
 import { ProjectDialog } from "./project-dialog";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Select,
@@ -22,14 +21,11 @@ import type { Project, ProjectStatus } from "@/types";
 
 type ProjectWithCount = Project & { _count: { tasks: number } };
 
-const statusConfig: Record<
-  ProjectStatus,
-  { label: string; variant: "default" | "secondary" | "success" | "warning" | "outline" }
-> = {
-  ACTIVE: { label: "Active", variant: "success" },
-  BACKLOG: { label: "Backlog", variant: "secondary" },
-  PAUSED: { label: "Paused", variant: "warning" },
-  COMPLETED: { label: "Completed", variant: "outline" },
+const statusConfig: Record<ProjectStatus, { label: string }> = {
+  ACTIVE: { label: "Active" },
+  BACKLOG: { label: "Backlog" },
+  PAUSED: { label: "Paused" },
+  COMPLETED: { label: "Completed" },
 };
 
 const statusOrder: ProjectStatus[] = ["ACTIVE", "BACKLOG", "PAUSED", "COMPLETED"];
@@ -39,8 +35,6 @@ function ProjectCard({ project }: { project: ProjectWithCount }) {
   const [deleted, setDeleted] = useState(false);
 
   if (deleted) return null;
-
-  const s = statusConfig[project.status];
 
   function handleDelete() {
     if (!confirm("Delete this project and all its tasks?")) return;
