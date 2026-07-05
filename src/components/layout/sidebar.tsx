@@ -13,6 +13,7 @@ import {
   Sparkles,
   Brain,
   Users,
+  FlaskConical,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/utils/cn";
@@ -27,6 +28,7 @@ const navItems = [
   { href: "/tasks", label: "Tasks", icon: CheckSquare },
   { href: "/daily-log", label: "Daily Log", icon: BookOpen },
   { href: "/habits", label: "Habits", icon: Repeat2 },
+  { href: "/prompts", label: "Prompts", icon: FlaskConical },
 ];
 
 // Only show these 5 on the mobile bottom bar (all 9 are in the desktop sidebar)
