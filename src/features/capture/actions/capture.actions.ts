@@ -65,6 +65,7 @@ export interface CreateSaveInput {
     reminders: boolean[];
     memories: boolean[];
     commands: boolean[];
+    people: boolean[];
     journal: boolean;
   };
   memoryEdits: Record<number, { title: string; content: string }>;
@@ -93,5 +94,6 @@ function revalidateAll() {
   revalidatePath("/habits");
   revalidatePath("/projects");
   revalidatePath("/memory");
+  revalidatePath("/people");
   revalidatePath("/");
 }

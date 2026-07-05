@@ -21,10 +21,11 @@ import {
   TrendingUp,
   CalendarDays,
   Activity,
+  Users,
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
-import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput } from "@/lib/ai/types";
+import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
@@ -41,6 +42,7 @@ interface CreateInclusion {
   reminders: boolean[];
   memories: boolean[];
   commands: boolean[];
+  people: boolean[];
   journal: boolean;
 }
 
@@ -90,6 +92,7 @@ export function CaptureView({ userName }: { userName: string }) {
           reminders: d.reminders.map((rem) => rem.confidence !== "low"),
           memories: d.memoryCandidates.map((m) => m.importance === "PERMANENT" || m.importance === "HIGH"),
           commands: d.commands.map((c) => c.confidence !== "low"),
+          people: d.peopleUpdates.map((p) => p.confidence !== "low"),
           journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
         });
         setActionInclusion(null);
@@ -306,6 +309,7 @@ function PreviewView({
       createInclusion.reminders.filter(Boolean).length +
       createInclusion.memories.filter(Boolean).length +
       createInclusion.commands.filter(Boolean).length +
+      createInclusion.people.filter(Boolean).length +
       (createInclusion.journal ? 1 : 0)
     : actionInclusion
     ? actionInclusion.filter(Boolean).length
@@ -567,6 +571,16 @@ function CreatePreview({
                     : `Reminder: ${cmd.target}`}
                 </p>
               </div>
+            </ItemRow>
+          ))}
+        </Section>
+      )}
+
+      {d.peopleUpdates.length > 0 && (
+        <Section icon={Users} title="People" count={d.peopleUpdates.length} note="→ Relationship memory">
+          {d.peopleUpdates.map((person, i) => (
+            <ItemRow key={i} included={!!inclusion.people[i]} onToggle={() => onToggle("people", i)} confidence={person.confidence} alwaysShowToggle>
+              <PersonUpdateCard person={person} />
             </ItemRow>
           ))}
         </Section>
@@ -840,6 +854,7 @@ function SavedView({
     result.projectsCreated > 0 && `${result.projectsCreated} project${result.projectsCreated !== 1 ? "s" : ""} created`,
     result.memoriesSaved > 0 && `${result.memoriesSaved} memor${result.memoriesSaved !== 1 ? "ies" : "y"} saved`,
     result.commandsExecuted > 0 && `${result.commandsExecuted} action${result.commandsExecuted !== 1 ? "s" : ""} executed`,
+    result.peopleUpdated > 0 && `${result.peopleUpdated} person record${result.peopleUpdated !== 1 ? "s" : ""} updated`,
     result.userStateUpdated && "State updated",
   ].filter(Boolean) as string[];
 
@@ -1100,6 +1115,55 @@ function MemoryCandidateCard({
           <p className="text-xs leading-relaxed text-neutral-600 dark:text-neutral-400">{committed.content}</p>
           <p className="text-[10px] italic text-neutral-400">{candidate.reason}</p>
         </>
+      )}
+    </div>
+  );
+}
+
+const PERSON_MEMORY_TYPE_LABELS: Record<string, string> = {
+  BIRTHDAY: "Birthday", PREFERENCE: "Preference", STORY: "Story",
+  BOUNDARY: "Boundary", COMMUNICATION_STYLE: "Comm Style",
+  IMPORTANT_EVENT: "Event", FOLLOW_UP: "Follow Up", GENERAL: "Note",
+};
+
+function PersonUpdateCard({ person }: { person: PersonUpdateOutput }) {
+  const pd = person.personData;
+  const facts = [
+    pd.relationshipType,
+    pd.occupation,
+    pd.birthday && `Birthday: ${pd.birthday}`,
+    pd.hometown && `From ${pd.hometown}`,
+  ].filter(Boolean) as string[];
+
+  return (
+    <div className="space-y-1.5">
+      <div className="flex items-center gap-2">
+        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{person.personName}</p>
+        {facts.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {facts.map((f, i) => (
+              <span key={i} className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">{f}</span>
+            ))}
+          </div>
+        )}
+      </div>
+      {person.memories.length > 0 && (
+        <div className="space-y-1">
+          {person.memories.map((mem, i) => (
+            <div key={i} className="flex items-start gap-1.5">
+              <span className="mt-0.5 rounded bg-purple-50 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-purple-600 dark:bg-purple-950 dark:text-purple-400">
+                {PERSON_MEMORY_TYPE_LABELS[mem.type] ?? mem.type}
+              </span>
+              <p className="text-xs text-neutral-600 dark:text-neutral-400">{mem.content}</p>
+            </div>
+          ))}
+        </div>
+      )}
+      {person.interaction && (
+        <p className="text-xs text-neutral-400">{person.interaction.summary}</p>
+      )}
+      {person.followUpTask && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">Follow-up: {person.followUpTask.title}</p>
       )}
     </div>
   );

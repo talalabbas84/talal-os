@@ -14,13 +14,16 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  inboxEntries  InboxEntry[]
-  projects      Project[]
-  tasks         Task[]
-  dailyLogs     DailyLog[]
-  habits        Habit[]
-  memoryEntries MemoryEntry[]
-  userState     UserState?
+  inboxEntries      InboxEntry[]
+  projects          Project[]
+  tasks             Task[]
+  dailyLogs         DailyLog[]
+  habits            Habit[]
+  memoryEntries     MemoryEntry[]
+  userState         UserState?
+  people            Person[]
+  personInteractions PersonInteraction[]
+  personMemories    PersonMemory[]
 }
 
 model UserState {
@@ -175,6 +178,91 @@ model MemoryEntry {
   @@index([userId])
   @@index([type])
   @@index([importance])
+}
+
+model Person {
+  id                String    @id @default(cuid())
+  name              String
+  aliases           String[]  @default([])
+  nickname          String?
+  relationshipType  String?
+  firstMetDate      String?
+  firstMetLocation  String?
+  birthday          String?
+  occupation        String?
+  hometown          String?
+  notes             String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  userId       String
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  interactions PersonInteraction[]
+  memories     PersonMemory[]
+
+  @@index([userId])
+  @@index([name])
+}
+
+model PersonInteraction {
+  id             String   @id @default(cuid())
+  personNameSnapshot String
+  date           String
+  location       String?
+  summary        String
+  topics         String[] @default([])
+  context        String?
+  sentiment      String?
+  followUpNeeded Boolean  @default(false)
+  followUpDate   String?
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  userId   String
+  user     User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personId String?
+  person   Person? @relation(fields: [personId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([personId])
+  @@index([date])
+}
+
+model PersonMemory {
+  id         String              @id @default(cuid())
+  title      String
+  content    String
+  importance MemoryImportance    @default(MEDIUM)
+  type       PersonMemoryType
+  source     PersonMemorySource  @default(MANUAL)
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([personId])
+  @@index([type])
+}
+
+enum PersonMemoryType {
+  BIRTHDAY
+  PREFERENCE
+  STORY
+  BOUNDARY
+  COMMUNICATION_STYLE
+  IMPORTANT_EVENT
+  FOLLOW_UP
+  GENERAL
+}
+
+enum PersonMemorySource {
+  CAPTURE
+  MANUAL
+  INTERACTION
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────────

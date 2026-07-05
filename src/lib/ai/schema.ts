@@ -108,6 +108,63 @@ export const commandOutputSchema = z.object({
   confidence: confidenceSchema.default("high"),
 });
 
+// ── People schemas ────────────────────────────────────────────────────────────
+
+export const PERSON_MEMORY_TYPES = [
+  "BIRTHDAY", "PREFERENCE", "STORY", "BOUNDARY",
+  "COMMUNICATION_STYLE", "IMPORTANT_EVENT", "FOLLOW_UP", "GENERAL",
+] as const;
+
+export const personDataSchema = z.object({
+  nickname: z.string().nullable().default(null),
+  relationshipType: z.string().nullable().default(null),
+  firstMetDate: z.string().nullable().default(null),
+  firstMetLocation: z.string().nullable().default(null),
+  birthday: z.string().nullable().default(null),
+  occupation: z.string().nullable().default(null),
+  hometown: z.string().nullable().default(null),
+  notes: z.string().nullable().default(null),
+});
+
+const PERSON_DATA_DEFAULT = {
+  nickname: null, relationshipType: null, firstMetDate: null,
+  firstMetLocation: null, birthday: null, occupation: null,
+  hometown: null, notes: null,
+} as const;
+
+export const personMemoryItemSchema = z.object({
+  title: z.string().min(1).max(255),
+  content: z.string().min(1),
+  type: z.enum(PERSON_MEMORY_TYPES),
+  importance: z.enum(MEMORY_IMPORTANCES),
+});
+
+export const personInteractionItemSchema = z.object({
+  date: z.string().nullable().default(null),
+  location: z.string().nullable().default(null),
+  summary: z.string().min(1),
+  topics: z.array(z.string()).default([]),
+  context: z.string().nullable().default(null),
+  sentiment: z.string().nullable().default(null),
+  followUpNeeded: z.boolean().default(false),
+  followUpDate: z.string().nullable().default(null),
+});
+
+export const followUpTaskItemSchema = z.object({
+  title: z.string().min(1).max(255),
+  dueDate: z.string().nullable().default(null),
+});
+
+export const personUpdateSchema = z.object({
+  personName: z.string().min(1).max(255),
+  personData: personDataSchema.default(PERSON_DATA_DEFAULT),
+  memories: z.array(personMemoryItemSchema).default([]),
+  interaction: personInteractionItemSchema.nullable().default(null),
+  followUpTask: followUpTaskItemSchema.nullable().default(null),
+  confidence: confidenceSchema.default("high"),
+  reason: z.string().min(1),
+});
+
 // ── Full capture data ─────────────────────────────────────────────────────────
 
 export const captureDataSchema = z.object({
@@ -127,6 +184,7 @@ export const captureDataSchema = z.object({
   reminders: z.array(reminderOutputSchema).default([]),
   memoryCandidates: z.array(memoryCandidateSchema).default([]),
   commands: z.array(commandOutputSchema).default([]),
+  peopleUpdates: z.array(personUpdateSchema).default([]),
 });
 
 // ── Top-level result ──────────────────────────────────────────────────────────
@@ -182,3 +240,6 @@ export type CaptureResult = z.infer<typeof captureResultSchema>;
 export type IntentResultOutput = z.infer<typeof intentResultSchema>;
 export type RecommendationOutput = z.infer<typeof recommendationSchema>;
 export type ReflectionResultOutput = z.infer<typeof reflectionResultSchema>;
+export type PersonUpdateOutput = z.infer<typeof personUpdateSchema>;
+export type PersonMemoryItemOutput = z.infer<typeof personMemoryItemSchema>;
+export type PersonInteractionItemOutput = z.infer<typeof personInteractionItemSchema>;

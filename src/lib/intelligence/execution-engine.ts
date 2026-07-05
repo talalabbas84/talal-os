@@ -24,6 +24,7 @@ export async function executeActions(
     journalSaved: false,
     userStateUpdated: false,
     commandsExecuted: 0,
+    peopleUpdated: 0,
   };
 
   // Prefetch for fuzzy matching (only if needed)
@@ -236,6 +237,102 @@ export async function executeActions(
           await prisma.task.update({ where: { id: match.id }, data: { dueDate: newDate } });
           result.commandsExecuted++;
         }
+        break;
+      }
+
+      case "CREATE_PERSON_UPDATE": {
+        const { payload } = action;
+        const pd = payload.personData;
+
+        // Find or create the Person record
+        let person = await prisma.person.findFirst({
+          where: { userId, name: { equals: payload.personName, mode: "insensitive" } },
+        });
+
+        if (!person) {
+          person = await prisma.person.create({
+            data: {
+              userId,
+              name: payload.personName,
+              nickname: pd.nickname ?? null,
+              relationshipType: pd.relationshipType ?? null,
+              firstMetDate: pd.firstMetDate ?? null,
+              firstMetLocation: pd.firstMetLocation ?? null,
+              birthday: pd.birthday ?? null,
+              occupation: pd.occupation ?? null,
+              hometown: pd.hometown ?? null,
+              notes: pd.notes ?? null,
+            },
+          });
+        } else {
+          // Update non-null fields only
+          await prisma.person.update({
+            where: { id: person.id },
+            data: {
+              ...(pd.nickname && { nickname: pd.nickname }),
+              ...(pd.relationshipType && { relationshipType: pd.relationshipType }),
+              ...(pd.firstMetDate && { firstMetDate: pd.firstMetDate }),
+              ...(pd.firstMetLocation && { firstMetLocation: pd.firstMetLocation }),
+              ...(pd.birthday && { birthday: pd.birthday }),
+              ...(pd.occupation && { occupation: pd.occupation }),
+              ...(pd.hometown && { hometown: pd.hometown }),
+              ...(pd.notes && { notes: pd.notes }),
+            },
+          });
+        }
+
+        // Create PersonMemory entries
+        for (const mem of payload.memories) {
+          await prisma.personMemory.create({
+            data: {
+              userId,
+              personId: person.id,
+              title: mem.title,
+              content: mem.content,
+              type: mem.type as Parameters<typeof prisma.personMemory.create>[0]["data"]["type"],
+              importance: mem.importance as Parameters<typeof prisma.personMemory.create>[0]["data"]["importance"],
+              source: "CAPTURE",
+            },
+          });
+        }
+
+        // Create PersonInteraction if present
+        if (payload.interaction) {
+          const ia = payload.interaction;
+          await prisma.personInteraction.create({
+            data: {
+              userId,
+              personId: person.id,
+              personNameSnapshot: payload.personName,
+              date: ia.date ?? new Date().toISOString().split("T")[0]!,
+              location: ia.location ?? null,
+              summary: ia.summary,
+              topics: ia.topics,
+              context: ia.context ?? null,
+              sentiment: ia.sentiment ?? null,
+              followUpNeeded: ia.followUpNeeded,
+              followUpDate: ia.followUpDate ?? null,
+            },
+          });
+        }
+
+        // Create follow-up Task if present
+        if (payload.followUpTask) {
+          const ft = payload.followUpTask;
+          await prisma.task.create({
+            data: {
+              userId,
+              title: ft.title,
+              priority: "MEDIUM",
+              dueDate: ft.dueDate ? new Date(ft.dueDate + "T00:00:00.000Z") : null,
+              importance: "MEDIUM",
+              urgency: "MEDIUM",
+              energyRequired: "LOW",
+            },
+          });
+        }
+
+        result.peopleUpdated++;
         break;
       }
     }

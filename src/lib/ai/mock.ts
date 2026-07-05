@@ -9,6 +9,7 @@ import type {
   IntentResultOutput,
   RecommendationOutput,
   ReflectionResultOutput,
+  PersonUpdateOutput,
 } from "./schema";
 import type { Intent } from "@/lib/intelligence/types";
 
@@ -511,6 +512,162 @@ function extractCommands(text: string): CommandOutput[] {
   return commands;
 }
 
+// ── People extraction ─────────────────────────────────────────────────────────
+
+// Common first names to help distinguish people from other proper nouns
+const NAME_PATTERN = /\b([A-Z][a-z]{1,20})\b/g;
+const EXCLUDED_NAMES = new Set([
+  "I", "The", "This", "That", "My", "Today", "Tomorrow", "Monday", "Tuesday",
+  "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "January", "February",
+  "March", "April", "May", "June", "July", "August", "September", "October",
+  "November", "December", "God", "AI",
+]);
+
+function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutput[] {
+  const updates = new Map<string, PersonUpdateOutput>();
+
+  // Pattern: "I met [Name]" / "I talked to [Name]" / "spoke with [Name]"
+  const meetPatterns = [
+    /I met ([A-Z][a-z]+) today(?: at (.+?))?[.,]/gi,
+    /I met ([A-Z][a-z]+)(?: at (.+?))?[.,]/gi,
+    /I (?:talked|spoke|chatted) (?:to|with) ([A-Z][a-z]+)/gi,
+    /([A-Z][a-z]+) (?:said|told me|mentioned|asked me|texted me|called me)/gi,
+  ];
+
+  const mentionedNames = new Set<string>();
+
+  for (const pattern of meetPatterns) {
+    for (const match of text.matchAll(pattern)) {
+      const name = match[1];
+      if (!name || EXCLUDED_NAMES.has(name)) continue;
+      mentionedNames.add(name);
+
+      if (!updates.has(name)) {
+        const isFirstMeet = /I met/.test(match[0]);
+        updates.set(name, {
+          personName: name,
+          personData: {
+            nickname: null,
+            relationshipType: null,
+            firstMetDate: isFirstMeet ? todayISO : null,
+            firstMetLocation: match[2]?.trim() ?? null,
+            birthday: null,
+            occupation: null,
+            hometown: null,
+            notes: null,
+          },
+          memories: [],
+          interaction: {
+            date: todayISO,
+            location: match[2]?.trim() ?? null,
+            summary: `Interaction with ${name}.`,
+            topics: [],
+            context: null,
+            sentiment: null,
+            followUpNeeded: false,
+            followUpDate: null,
+          },
+          followUpTask: null,
+          confidence: "high",
+          reason: `Detected interaction with ${name}.`,
+        });
+      }
+    }
+  }
+
+  // Extract specific facts per person
+  for (const name of mentionedNames) {
+    const update = updates.get(name)!;
+    const sentences = splitSentences(text);
+
+    for (const sentence of sentences) {
+      const sl = sentence.toLowerCase();
+      if (!sl.includes(name.toLowerCase())) continue;
+
+      // Birthday: "[Name]'s birthday is June 5" / "birthday on March 3"
+      const birthdayMatch = sentence.match(
+        new RegExp(`${name}['']?s? birthday (?:is|on|:)\\s*([A-Za-z]+ \\d+(?:,? \\d{4})?)`, "i"),
+      );
+      if (birthdayMatch?.[1]) {
+        update.personData.birthday = birthdayMatch[1].trim();
+        update.memories.push({
+          title: `${name}'s birthday`,
+          content: `Birthday: ${birthdayMatch[1].trim()}`,
+          type: "BIRTHDAY",
+          importance: "PERMANENT",
+        });
+      }
+
+      // Preference: "[Name] loves/likes/hates [X]"
+      const prefMatch = sentence.match(
+        new RegExp(`${name} (?:loves?|likes?|enjoys?|hates?|dislikes?|is passionate about)\\s+(.+?)(?:[.,!?]|$)`, "i"),
+      );
+      if (prefMatch?.[1]) {
+        const pref = prefMatch[1].trim();
+        update.memories.push({
+          title: `${name} loves ${pref}`,
+          content: sentence.trim(),
+          type: "PREFERENCE",
+          importance: "MEDIUM",
+        });
+      }
+
+      // Feeling/situation: "[Name] is nervous/stressed/excited about [X]"
+      const feelingMatch = sentence.match(
+        new RegExp(`${name} (?:is|seems?|feels?)\\s+(nervous|stressed|excited|worried|happy|sad|anxious)(?:\\s+about\\s+(.+?))?(?:[.,!?]|$)`, "i"),
+      );
+      if (feelingMatch?.[1]) {
+        const feeling = feelingMatch[1];
+        const about = feelingMatch[2] ? ` about ${feelingMatch[2]}` : "";
+        update.memories.push({
+          title: `${name} is ${feeling}${about}`,
+          content: sentence.trim(),
+          type: "IMPORTANT_EVENT",
+          importance: "HIGH",
+        });
+        if (update.interaction) {
+          update.interaction.sentiment = feeling;
+          if (feelingMatch[2]) update.interaction.topics.push(feelingMatch[2].trim());
+        }
+      }
+
+      // Relationship: "[Name] is my [type]" / "my [type] [Name]"
+      const relMatch = sentence.match(
+        new RegExp(`(?:${name} is my|my) (friend|colleague|coworker|partner|dance partner|roommate|cousin|brother|sister|mentor|student)(?:\\s+${name})?`, "i"),
+      );
+      if (relMatch?.[1] && !update.personData.relationshipType) {
+        update.personData.relationshipType = relMatch[1].toLowerCase();
+      }
+
+      // Occupation: "[Name] works as / is a [job]"
+      const jobMatch = sentence.match(
+        new RegExp(`${name} (?:works as|is a|is an)\\s+(.+?)(?:[.,!?]|$)`, "i"),
+      );
+      if (jobMatch?.[1] && !update.personData.occupation) {
+        update.personData.occupation = jobMatch[1].trim();
+      }
+    }
+
+    // Follow-up detection
+    const followUpMatch = text.match(
+      new RegExp(`remind me to (?:ask|check on|follow up with|check in with)?\\s*(?:${name})?\\s*(?:about\\s+(.+?))?(?:[.,!?]|$)`, "i"),
+    );
+    if (followUpMatch || /remind me to (?:ask|check)/.test(text)) {
+      update.interaction = update.interaction ?? {
+        date: todayISO, location: null, summary: `Interaction with ${name}.`,
+        topics: [], context: null, sentiment: null, followUpNeeded: true, followUpDate: null,
+      };
+      if (update.interaction) update.interaction.followUpNeeded = true;
+      const followUpDesc = followUpMatch?.[1]
+        ? `Ask ${name} about ${followUpMatch[1].trim()}`
+        : `Follow up with ${name}`;
+      update.followUpTask = { title: followUpDesc, dueDate: null };
+    }
+  }
+
+  return Array.from(updates.values());
+}
+
 // ── Intent classification ─────────────────────────────────────────────────────
 
 const INTENT_PATTERNS: Array<{ regex: RegExp; intent: Intent; reason: string }> = [
@@ -634,6 +791,7 @@ export const mockProvider: AIProvider = {
   async organizeCapture(input: string, _contextPrompt?: string): Promise<CaptureResult> {
     await new Promise((r) => setTimeout(r, 600));
 
+    const todayISO = dateISO(0);
     const healthStatus = extractHealthStatus(input);
     const mood = extractMood(input, healthStatus);
     const tasks = extractTasks(input);
@@ -641,6 +799,7 @@ export const mockProvider: AIProvider = {
     const habits = extractHabits(input, healthStatus);
     const memoryCandidates = extractMemoryCandidates(input);
     const commands = extractCommands(input);
+    const peopleUpdates = extractPeopleUpdates(input, todayISO);
 
     const improveTomorrow = tasks
       .filter((t) => t.dueDate === dateISO(1))
@@ -661,6 +820,7 @@ export const mockProvider: AIProvider = {
       habits.length > 0 && `${habits.length} habit${habits.length !== 1 ? "s" : ""} tracked`,
       memoryCandidates.length > 0 && `${memoryCandidates.length} memory insight${memoryCandidates.length !== 1 ? "s" : ""} detected`,
       commands.length > 0 && `${commands.length} command${commands.length !== 1 ? "s" : ""} detected`,
+      peopleUpdates.length > 0 && `${peopleUpdates.length} person update${peopleUpdates.length !== 1 ? "s" : ""} detected`,
     ].filter(Boolean).join(". ");
 
     return {
@@ -677,6 +837,7 @@ export const mockProvider: AIProvider = {
         reminders: [],
         memoryCandidates,
         commands,
+        peopleUpdates,
       },
     };
   },

@@ -142,6 +142,7 @@ export async function processCapture(
         reminders: d.reminders.map((r) => r.confidence !== "low"),
         memories: d.memoryCandidates.map((m) => m.importance === "PERMANENT" || m.importance === "HIGH"),
         commands: d.commands.map((c) => c.confidence !== "low"),
+        people: d.peopleUpdates.map((p) => p.confidence !== "low"),
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       };
       return {

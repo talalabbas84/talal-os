@@ -9,6 +9,7 @@ import type {
   MemoryPayload,
   ReminderPayload,
   ProjectPayload,
+  PersonUpdatePayload,
   Recommendation,
   ReflectionData,
   PlanSummary,
@@ -17,6 +18,7 @@ import type {
   CaptureResult,
   CommandOutput,
   MemoryCandidateOutput,
+  PersonUpdateOutput,
 } from "@/lib/ai/types";
 
 let _seq = 0;
@@ -36,6 +38,7 @@ export function planFromCapture(
     reminders: boolean[];
     memories: boolean[];
     commands: boolean[];
+    people: boolean[];
     journal: boolean;
   },
   memoryEdits: Record<number, { title: string; content: string }>,
@@ -107,6 +110,11 @@ export function planFromCapture(
   d.commands.forEach((cmd, i) => {
     if (!inclusion.commands[i]) return;
     actions.push(...planFromCommand(cmd));
+  });
+
+  d.peopleUpdates.forEach((p, i) => {
+    if (!inclusion.people[i]) return;
+    actions.push(...planFromPersonUpdate(p));
   });
 
   return actions;
@@ -210,6 +218,19 @@ export function planFromMemoryCandidates(candidates: MemoryCandidateOutput[]): P
     label: `Memory: ${m.title}`,
     payload: { title: m.title, content: m.content, type: m.type, importance: m.importance, source: "CAPTURE" as const },
   }));
+}
+
+// ── From PEOPLE updates ───────────────────────────────────────────────────────
+
+export function planFromPersonUpdate(p: PersonUpdateOutput): PlannedAction[] {
+  const payload: PersonUpdatePayload = {
+    personName: p.personName,
+    personData: p.personData,
+    memories: p.memories,
+    interaction: p.interaction,
+    followUpTask: p.followUpTask,
+  };
+  return [{ id: nextId("person"), type: "CREATE_PERSON_UPDATE", label: `Person: ${p.personName}`, payload }];
 }
 
 // ── From PLAN ─────────────────────────────────────────────────────────────────

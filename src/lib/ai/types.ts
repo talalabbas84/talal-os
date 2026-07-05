@@ -16,6 +16,9 @@ export type {
   IntentResultOutput,
   RecommendationOutput,
   ReflectionResultOutput,
+  PersonUpdateOutput,
+  PersonMemoryItemOutput,
+  PersonInteractionItemOutput,
 } from "./schema";
 
 // The single contract every provider must implement.

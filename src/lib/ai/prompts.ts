@@ -81,6 +81,33 @@ energyRequired (LOW | MEDIUM | HIGH):
 - HIGH: "big", "complex", "hard", multi-step tasks, creative work
 - MEDIUM: default
 
+━━ PEOPLE ━━
+Detect when the user mentions a real person. Extract structured people updates.
+
+Trigger phrases: "I met [Name]", "I talked to [Name]", "[Name] said", "[Name]'s birthday",
+"[Name] told me", "follow up with [Name]", "remind me to ask [Name]".
+
+For each person mentioned:
+- personName: their name (capitalize properly)
+- personData: any facts about them (birthday, occupation, hometown, relationship type, nickname)
+  - birthday: store as written ("June 5", "January 15, 1990") — do not infer year
+  - relationshipType: "friend", "colleague", "dance partner", "family", etc.
+  - firstMetDate/firstMetLocation: if this is clearly a first meeting
+- memories: individual facts worth keeping long-term
+  - type: BIRTHDAY | PREFERENCE | STORY | BOUNDARY | COMMUNICATION_STYLE | IMPORTANT_EVENT | FOLLOW_UP | GENERAL
+  - importance: PERMANENT (birthday, key facts) | HIGH (strong preference, important event) | MEDIUM | LOW
+- interaction: if user had an interaction today or recently
+  - date: today's date (YYYY-MM-DD) unless specified otherwise
+  - summary: 1-2 sentence summary of the interaction
+  - topics: key topics discussed
+  - followUpNeeded: true if user needs to check back
+- followUpTask: if user says "remind me to X" or "check in with [Name]"
+  - title: the follow-up task title
+  - dueDate: resolved date if mentioned
+
+Do NOT create a person for: famous people, AI, fictional characters.
+Do NOT duplicate: if the same person appears multiple times, merge into one entry.
+
 ━━ MEMORY CANDIDATES ━━
 Look for moments worth storing in long-term memory — insights about identity, principles, or patterns.
 
@@ -161,6 +188,42 @@ JSON structure:
         "target": "exact task or habit name",
         "details": "string or null",
         "confidence": "high|medium|low"
+      }
+    ],
+    "peopleUpdates": [
+      {
+        "personName": "string",
+        "personData": {
+          "nickname": "string or null",
+          "relationshipType": "string or null",
+          "firstMetDate": "YYYY-MM-DD or null",
+          "firstMetLocation": "string or null",
+          "birthday": "string or null",
+          "occupation": "string or null",
+          "hometown": "string or null",
+          "notes": "string or null"
+        },
+        "memories": [
+          {
+            "title": "string",
+            "content": "string",
+            "type": "BIRTHDAY|PREFERENCE|STORY|BOUNDARY|COMMUNICATION_STYLE|IMPORTANT_EVENT|FOLLOW_UP|GENERAL",
+            "importance": "LOW|MEDIUM|HIGH|PERMANENT"
+          }
+        ],
+        "interaction": {
+          "date": "YYYY-MM-DD or null",
+          "location": "string or null",
+          "summary": "string",
+          "topics": ["string"],
+          "context": "string or null",
+          "sentiment": "string or null",
+          "followUpNeeded": false,
+          "followUpDate": "string or null"
+        },
+        "followUpTask": { "title": "string", "dueDate": "YYYY-MM-DD or null" },
+        "confidence": "high|medium|low",
+        "reason": "string"
       }
     ]
   }

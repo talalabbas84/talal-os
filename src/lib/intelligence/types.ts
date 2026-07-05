@@ -34,6 +34,7 @@ export const ACTION_TYPES = [
   "CREATE_MEMORY",
   "CREATE_REMINDER",
   "CREATE_PROJECT",
+  "CREATE_PERSON_UPDATE",
   "COMPLETE_TASK",
   "COMPLETE_HABIT",
   "RESCHEDULE_TASK",
@@ -52,6 +53,7 @@ export type PlannedAction =
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
   | { id: string; type: "CREATE_PROJECT"; label: string; payload: ProjectPayload }
+  | { id: string; type: "CREATE_PERSON_UPDATE"; label: string; payload: PersonUpdatePayload }
   | { id: string; type: "COMPLETE_TASK"; label: string; payload: { taskTitle: string } }
   | { id: string; type: "COMPLETE_HABIT"; label: string; payload: { habitName: string } }
   | { id: string; type: "RESCHEDULE_TASK"; label: string; payload: { taskTitle: string; details: string | null } }
@@ -106,6 +108,41 @@ export interface JournalPayload {
   accomplished?: string;
   distractedBy?: string;
   improveTomorrow?: string;
+}
+
+export interface PersonMemoryItemPayload {
+  title: string;
+  content: string;
+  type: string;
+  importance: string;
+}
+
+export interface PersonInteractionPayload {
+  date: string | null;
+  location: string | null;
+  summary: string;
+  topics: string[];
+  context: string | null;
+  sentiment: string | null;
+  followUpNeeded: boolean;
+  followUpDate: string | null;
+}
+
+export interface PersonUpdatePayload {
+  personName: string;
+  personData: {
+    nickname: string | null;
+    relationshipType: string | null;
+    firstMetDate: string | null;
+    firstMetLocation: string | null;
+    birthday: string | null;
+    occupation: string | null;
+    hometown: string | null;
+    notes: string | null;
+  };
+  memories: PersonMemoryItemPayload[];
+  interaction: PersonInteractionPayload | null;
+  followUpTask: { title: string; dueDate: string | null } | null;
 }
 
 export interface UserStatePayload {
@@ -205,4 +242,5 @@ export interface ExecutionResult {
   journalSaved: boolean;
   userStateUpdated: boolean;
   commandsExecuted: number;
+  peopleUpdated: number;
 }
