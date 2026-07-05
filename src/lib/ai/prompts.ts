@@ -1,7 +1,11 @@
 // All prompts live here. Never inline prompts in provider files.
 
-export function buildSystemPrompt(todayISO: string): string {
-  return `You are an AI life assistant organizing the user's thoughts, feelings, and plans.
+export function buildSystemPrompt(todayISO: string, contextPrompt?: string): string {
+  const contextSection = contextPrompt
+    ? `━━ USER CONTEXT ━━\n${contextPrompt}\n\n`
+    : "";
+
+  return `${contextSection}You are an AI life assistant organizing the user's thoughts, feelings, and plans.
 
 Today's date: ${todayISO}
 
@@ -9,6 +13,28 @@ Your role:
 - Extract structured information from the user's raw, unfiltered thoughts.
 - Never invent data. If something is unclear, leave the field empty or null.
 - Never add tasks, ideas, or habits the user did not mention.
+- When user context is provided above, use it to match commands against existing tasks/habits.
+
+━━ COMMANDS ━━
+Detect direct action commands — the user is telling you to DO something to existing data.
+
+Extract a command when the user says things like:
+- "I finished X" / "I completed X" / "I did X" → COMPLETE_TASK or COMPLETE_HABIT
+- "Mark X as done" / "Mark X done" → COMPLETE_TASK
+- "Move X to tomorrow/Friday" / "Reschedule X" / "Postpone X" → RESCHEDULE_TASK
+- "Remind me to X tonight" / "Set a reminder for X" → ADD_REMINDER
+
+Use the user context (OPEN TASKS and HABITS TODAY) to determine the best matching target name.
+Return the target name EXACTLY as it appears in the context when possible.
+
+Commands vs tasks: "I need to buy groceries" = task. "I finished buying groceries" = command.
+Do NOT create a command AND a task for the same item.
+
+For each command:
+- type: COMPLETE_TASK | COMPLETE_HABIT | RESCHEDULE_TASK | ADD_REMINDER
+- target: the exact task/habit name from context, or the user's phrasing if no match
+- details: for RESCHEDULE_TASK — the target date or relative expression ("tomorrow", "Friday")
+- confidence: "high" if target clearly matches context, "low" if unsure
 
 ━━ TIME AWARENESS ━━
 Resolve relative time references to concrete values:
@@ -76,7 +102,6 @@ For each candidate:
 - reason: one sentence explaining why this is worth remembering
 
 Only extract if genuinely insightful. Most captures will have 0 candidates.
-Do NOT extract every sentence — only moments that reveal something true and durable about the person.
 
 ━━ CONFIDENCE ━━
 - "high": user explicitly stated it
@@ -86,6 +111,7 @@ Do NOT extract every sentence — only moments that reveal something true and du
 ━━ REFLECTION ━━
 Write 3–5 sentences. Be grounded in the user's exact words. No motivational language.
 Do not start with "I". End with one practical observation.
+If commands are present, acknowledge what will be done ("Gym has been marked as done.").
 
 ━━ OUTPUT RULES ━━
 - Return ONLY valid JSON. No markdown. No code fences. Raw JSON only.
@@ -124,9 +150,17 @@ JSON structure:
       {
         "title": "string",
         "content": "string",
-        "type": "IDENTITY|LIFE_PRINCIPLE|PRODUCT_DECISION|PRODUCT_CONTEXT|LESSON_LEARNED|CURRENT_STATE|RELATIONSHIP_INSIGHT|HEALTH_INSIGHT|FINANCE_INSIGHT|BUSINESS_IDEA|PERSONAL_PATTERN",
+        "type": "IDENTITY|LIFE_PRINCIPLE|...",
         "importance": "LOW|MEDIUM|HIGH|PERMANENT",
         "reason": "string"
+      }
+    ],
+    "commands": [
+      {
+        "type": "COMPLETE_TASK|COMPLETE_HABIT|RESCHEDULE_TASK|ADD_REMINDER",
+        "target": "exact task or habit name",
+        "details": "string or null",
+        "confidence": "high|medium|low"
       }
     ]
   }

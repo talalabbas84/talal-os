@@ -92,6 +92,22 @@ export const memoryCandidateSchema = z.object({
   reason: z.string().min(1),
 });
 
+// ── Command schema ────────────────────────────────────────────────────────────
+
+export const COMMAND_TYPES = [
+  "COMPLETE_TASK",   // "I finished X", "Mark X done"
+  "COMPLETE_HABIT",  // explicit habit completion
+  "RESCHEDULE_TASK", // "Move X to tomorrow"
+  "ADD_REMINDER",    // "Remind me to X"
+] as const;
+
+export const commandOutputSchema = z.object({
+  type: z.enum(COMMAND_TYPES),
+  target: z.string().min(1).max(255),   // task/habit name to match
+  details: z.string().nullable().default(null), // e.g. "tomorrow" for RESCHEDULE
+  confidence: confidenceSchema.default("high"),
+});
+
 // ── Full capture data ─────────────────────────────────────────────────────────
 
 export const captureDataSchema = z.object({
@@ -110,6 +126,7 @@ export const captureDataSchema = z.object({
   projects: z.array(projectOutputSchema).default([]),
   reminders: z.array(reminderOutputSchema).default([]),
   memoryCandidates: z.array(memoryCandidateSchema).default([]),
+  commands: z.array(commandOutputSchema).default([]),
 });
 
 // ── Top-level result ──────────────────────────────────────────────────────────
@@ -128,5 +145,6 @@ export type HabitOutput = z.infer<typeof habitOutputSchema>;
 export type ProjectOutput = z.infer<typeof projectOutputSchema>;
 export type ReminderOutput = z.infer<typeof reminderOutputSchema>;
 export type MemoryCandidateOutput = z.infer<typeof memoryCandidateSchema>;
+export type CommandOutput = z.infer<typeof commandOutputSchema>;
 export type CaptureData = z.infer<typeof captureDataSchema>;
 export type CaptureResult = z.infer<typeof captureResultSchema>;

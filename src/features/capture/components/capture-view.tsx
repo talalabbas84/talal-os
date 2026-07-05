@@ -10,6 +10,7 @@ import {
   FolderPlus,
   Bell,
   Brain,
+  Zap,
   Loader2,
   AlertCircle,
   CheckCircle2,
@@ -26,6 +27,7 @@ import type {
   ProjectOutput,
   ReminderOutput,
   MemoryCandidateOutput,
+  CommandOutput,
 } from "@/lib/ai/types";
 import type { SaveCaptureInput } from "../lib/schema";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
@@ -42,6 +44,7 @@ interface Inclusion {
   projects: boolean[];
   reminders: boolean[];
   memories: boolean[];
+  commands: boolean[];
   journal: boolean;
 }
 
@@ -89,6 +92,7 @@ export function CaptureView({ userName }: { userName: string }) {
         memories: d.memoryCandidates.map(
           (m) => m.importance === "PERMANENT" || m.importance === "HIGH",
         ),
+        commands: d.commands.map((c) => c.confidence !== "low"),
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       });
       setResult(res.data);
@@ -142,6 +146,9 @@ export function CaptureView({ userName }: { userName: string }) {
             importance: m.importance,
           };
         }),
+      commands: d.commands
+        .filter((_, i) => !!inclusion.commands[i])
+        .map(({ type, target, details }) => ({ type, target, details })),
     };
 
     startSaving(async () => {
@@ -164,6 +171,8 @@ export function CaptureView({ userName }: { userName: string }) {
     setSaveResult(null);
     setMemoryEdits({});
   }
+
+  // commands toggled via the same generic toggle() — key is "commands"
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -327,6 +336,7 @@ function PreviewView({
     inclusion.projects.filter(Boolean).length +
     inclusion.reminders.filter(Boolean).length +
     inclusion.memories.filter(Boolean).length +
+    inclusion.commands.filter(Boolean).length +
     (inclusion.journal ? 1 : 0);
 
   return (
@@ -477,6 +487,28 @@ function PreviewView({
         </Section>
       )}
 
+      {/* Commands */}
+      {d.commands.length > 0 && (
+        <Section
+          icon={Zap}
+          title="Actions"
+          count={d.commands.length}
+          note="Executes against existing data"
+        >
+          {d.commands.map((cmd, i) => (
+            <ItemRow
+              key={i}
+              included={!!inclusion.commands[i]}
+              onToggle={() => onToggle("commands", i)}
+              confidence={cmd.confidence}
+              alwaysShowToggle
+            >
+              <CommandCard cmd={cmd} />
+            </ItemRow>
+          ))}
+        </Section>
+      )}
+
       {/* Error */}
       {error && (
         <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 p-4 dark:border-red-900 dark:bg-red-950">
@@ -538,6 +570,7 @@ function SavedView({ result, onReset }: { result: SaveResult; onReset: () => voi
     result.habitsUpdated > 0 && `${result.habitsUpdated} habit completion${result.habitsUpdated !== 1 ? "s" : ""} recorded`,
     result.projectsCreated > 0 && `${result.projectsCreated} project${result.projectsCreated !== 1 ? "s" : ""} created`,
     result.memoriesSaved > 0 && `${result.memoriesSaved} memor${result.memoriesSaved !== 1 ? "ies" : "y"} saved to vault`,
+    result.commandsExecuted > 0 && `${result.commandsExecuted} action${result.commandsExecuted !== 1 ? "s" : ""} executed`,
   ].filter(Boolean) as string[];
 
   return (
@@ -924,6 +957,33 @@ function MemoryCandidateCard({
       )}
     </div>
   );
+}
+
+function CommandCard({ cmd }: { cmd: CommandOutput }) {
+  const label = formatCommandLabel(cmd);
+  return (
+    <div className="space-y-0.5">
+      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{label}</p>
+      {cmd.details && (
+        <p className="text-xs text-neutral-400">{cmd.details}</p>
+      )}
+    </div>
+  );
+}
+
+function formatCommandLabel(cmd: CommandOutput): string {
+  switch (cmd.type) {
+    case "COMPLETE_TASK":
+      return `Mark "${cmd.target}" as done`;
+    case "COMPLETE_HABIT":
+      return `Log habit: ${cmd.target}`;
+    case "RESCHEDULE_TASK":
+      return `Reschedule "${cmd.target}"${cmd.details ? ` → ${cmd.details}` : ""}`;
+    case "ADD_REMINDER":
+      return `Add reminder: ${cmd.target}`;
+    default:
+      return cmd.target;
+  }
 }
 
 function JournalRow({ label, value }: { label: string; value: string }) {

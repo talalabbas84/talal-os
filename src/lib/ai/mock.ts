@@ -1,5 +1,5 @@
 import type { AIProvider } from "./types";
-import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput, MemoryCandidateOutput } from "./schema";
+import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput, MemoryCandidateOutput, CommandOutput } from "./schema";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -435,10 +435,75 @@ function buildReflection(
   return parts.join(" ") || "Capture processed.";
 }
 
+// ── Command extraction ────────────────────────────────────────────────────────
+
+function extractCommands(text: string): CommandOutput[] {
+  const commands: CommandOutput[] = [];
+  const seen = new Set<string>();
+
+  for (const sentence of splitSentences(text)) {
+    const lower = sentence.toLowerCase();
+
+    // "I finished X" / "I've finished X" / "I completed X" / "I did X" / "done with X"
+    // Only for non-habit items (habits are handled by extractHabits)
+    const finishedMatch = sentence.match(
+      /(?:i(?:'ve)?\s+(?:finished|completed|done)|done with)\s+(?:the\s+)?(.+?)(?:[.!?]|$)/i,
+    );
+    if (finishedMatch?.[1]) {
+      const target = finishedMatch[1].replace(/[.!?]$/, "").trim();
+      const isKnownHabit = HABIT_NAMES.some((h) => target.toLowerCase() === h);
+      if (!isKnownHabit && !seen.has(target.toLowerCase()) && target.length > 2) {
+        seen.add(target.toLowerCase());
+        commands.push({ type: "COMPLETE_TASK", target, details: null, confidence: "high" });
+      }
+    }
+
+    // "Mark X as done" / "Mark X done"
+    const markMatch = sentence.match(/mark\s+(.+?)\s+(?:as\s+)?done/i);
+    if (markMatch?.[1]) {
+      const target = markMatch[1].trim();
+      if (!seen.has(target.toLowerCase()) && target.length > 2) {
+        seen.add(target.toLowerCase());
+        commands.push({ type: "COMPLETE_TASK", target, details: null, confidence: "high" });
+      }
+    }
+
+    // "Move X to Y" / "Postpone X to Y" / "Reschedule X to Y" / "Push X to Y"
+    const moveMatch = sentence.match(
+      /(?:move|postpone|reschedule|delay|push)\s+(.+?)\s+to\s+(.+?)(?:[.!?]|$)/i,
+    );
+    if (moveMatch?.[1] && moveMatch?.[2]) {
+      const target = moveMatch[1].trim();
+      const details = moveMatch[2].trim();
+      if (!seen.has(target.toLowerCase()) && target.length > 2) {
+        seen.add(target.toLowerCase());
+        commands.push({ type: "RESCHEDULE_TASK", target, details, confidence: "high" });
+      }
+    }
+
+    // "Remind me to X" / "Remind me tonight to X"
+    const remindMatch = sentence.match(
+      /remind\s+me\s+(?:(?:tonight|tomorrow|today|this\s+\w+)\s+)?to\s+(.+?)(?:[.!?]|$)/i,
+    );
+    if (remindMatch?.[1]) {
+      const target = remindMatch[1].trim();
+      if (!seen.has(target.toLowerCase()) && target.length > 2) {
+        seen.add(target.toLowerCase());
+        // Extract time detail if present
+        const timeMatch = lower.match(/remind\s+me\s+(tonight|tomorrow|today)/);
+        const details = timeMatch?.[1] ?? null;
+        commands.push({ type: "ADD_REMINDER", target, details, confidence: "high" });
+      }
+    }
+  }
+
+  return commands;
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export const mockProvider: AIProvider = {
-  async organizeCapture(input: string): Promise<CaptureResult> {
+  async organizeCapture(input: string, _contextPrompt?: string): Promise<CaptureResult> {
     await new Promise((r) => setTimeout(r, 600));
 
     const healthStatus = extractHealthStatus(input);
@@ -447,6 +512,7 @@ export const mockProvider: AIProvider = {
     const ideas = extractIdeas(input);
     const habits = extractHabits(input, healthStatus);
     const memoryCandidates = extractMemoryCandidates(input);
+    const commands = extractCommands(input);
 
     const improveTomorrow = tasks
       .filter((t) => t.dueDate === dateISO(1))
@@ -466,6 +532,7 @@ export const mockProvider: AIProvider = {
       ideas.length > 0 && `${ideas.length} idea${ideas.length !== 1 ? "s" : ""} captured`,
       habits.length > 0 && `${habits.length} habit${habits.length !== 1 ? "s" : ""} tracked`,
       memoryCandidates.length > 0 && `${memoryCandidates.length} memory insight${memoryCandidates.length !== 1 ? "s" : ""} detected`,
+      commands.length > 0 && `${commands.length} command${commands.length !== 1 ? "s" : ""} detected`,
     ].filter(Boolean).join(". ");
 
     return {
@@ -481,6 +548,7 @@ export const mockProvider: AIProvider = {
         projects: [],
         reminders: [],
         memoryCandidates,
+        commands,
       },
     };
   },

@@ -62,9 +62,9 @@ function parseAndValidate(
 }
 
 export const geminiProvider: AIProvider = {
-  async organizeCapture(input: string): Promise<CaptureResult> {
+  async organizeCapture(input: string, contextPrompt?: string): Promise<CaptureResult> {
     const client = getClient();
-    const systemPrompt = buildSystemPrompt(todayISO());
+    const systemPrompt = buildSystemPrompt(todayISO(), contextPrompt);
 
     // First attempt
     const raw1 = await callModel(client, systemPrompt, input);

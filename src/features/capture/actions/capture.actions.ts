@@ -4,10 +4,12 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getAIProvider } from "@/lib/ai/provider";
+import { buildUserContext } from "@/lib/context/context-builder";
 import { saveCaptureSchema } from "../lib/schema";
 import { computePriorityScore } from "@/utils/priority";
 import type { ActionResult } from "@/types";
 import type { CaptureResult } from "@/lib/ai/types";
+import type { Task, Habit } from "@prisma/client";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -21,12 +23,13 @@ export async function organizeCapture(
   text: string,
 ): Promise<ActionResult<CaptureResult>> {
   try {
-    await requireUserId();
+    const userId = await requireUserId();
     if (!text || text.trim().length < 3) {
       return { success: false, error: "Please type something first." };
     }
     const provider = getAIProvider();
-    const result = await provider.organizeCapture(text.trim());
+    const { prompt: contextPrompt } = await buildUserContext(userId);
+    const result = await provider.organizeCapture(text.trim(), contextPrompt);
     return { success: true, data: result };
   } catch (err) {
     const message = err instanceof Error ? err.message : "AI is temporarily unavailable.";
@@ -44,6 +47,7 @@ export interface SaveResult {
   habitsUpdated: number;
   projectsCreated: number;
   memoriesSaved: number;
+  commandsExecuted: number;
 }
 
 export async function saveCapture(
@@ -56,7 +60,8 @@ export async function saveCapture(
       return { success: false, error: parsed.error.issues[0]?.message ?? "Invalid input." };
     }
 
-    const { tasks, ideas, habits, projects, reminders, journal, saveJournal, memories } = parsed.data;
+    const { tasks, ideas, habits, projects, reminders, journal, saveJournal, memories, commands } =
+      parsed.data;
     const today = new Date();
     today.setUTCHours(0, 0, 0, 0);
 
@@ -67,6 +72,15 @@ export async function saveCapture(
     let habitsUpdated = 0;
     let projectsCreated = 0;
     let memoriesSaved = 0;
+    let commandsExecuted = 0;
+
+    // Prefetch existing tasks/habits for command matching (before creating new ones)
+    const [existingTasks, existingHabits] = commands.length > 0
+      ? await Promise.all([
+          prisma.task.findMany({ where: { userId, status: { not: "DONE" } } }),
+          prisma.habit.findMany({ where: { userId, isActive: true } }),
+        ])
+      : [[] as Task[], [] as Habit[]];
 
     // 1. Projects (user explicitly opted-in)
     const projectMap: Record<string, string> = {};
@@ -197,6 +211,62 @@ export async function saveCapture(
       memoriesSaved++;
     }
 
+    // 8. Commands — execute against existing data
+    for (const cmd of commands) {
+      switch (cmd.type) {
+        case "COMPLETE_TASK": {
+          const match = findTaskFuzzy(existingTasks, cmd.target);
+          if (match) {
+            await prisma.task.update({
+              where: { id: match.id },
+              data: { status: "DONE" },
+            });
+            commandsExecuted++;
+          }
+          break;
+        }
+        case "COMPLETE_HABIT": {
+          const match = findHabitFuzzy(existingHabits, cmd.target);
+          if (match) {
+            const existing = await prisma.habitCompletion.findUnique({
+              where: { habitId_date: { habitId: match.id, date: today } },
+            });
+            if (!existing) {
+              await prisma.habitCompletion.create({
+                data: { habitId: match.id, date: today },
+              });
+              commandsExecuted++;
+            }
+          }
+          break;
+        }
+        case "RESCHEDULE_TASK": {
+          const match = findTaskFuzzy(existingTasks, cmd.target);
+          const newDate = resolveDate(cmd.details);
+          if (match && newDate) {
+            await prisma.task.update({
+              where: { id: match.id },
+              data: { dueDate: newDate },
+            });
+            commandsExecuted++;
+          }
+          break;
+        }
+        case "ADD_REMINDER": {
+          await prisma.inboxEntry.create({
+            data: {
+              title: cmd.target,
+              description: cmd.details ? `When: ${cmd.details}` : null,
+              category: "TASK",
+              userId,
+            },
+          });
+          commandsExecuted++;
+          break;
+        }
+      }
+    }
+
     revalidatePath("/tasks");
     revalidatePath("/inbox");
     revalidatePath("/daily-log");
@@ -207,9 +277,75 @@ export async function saveCapture(
 
     return {
       success: true,
-      data: { tasksCreated, ideasCreated, remindersCreated, journalSaved, habitsUpdated, projectsCreated, memoriesSaved },
+      data: {
+        tasksCreated,
+        ideasCreated,
+        remindersCreated,
+        journalSaved,
+        habitsUpdated,
+        projectsCreated,
+        memoriesSaved,
+        commandsExecuted,
+      },
     };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };
   }
+}
+
+// ── Command helpers ───────────────────────────────────────────────────────────
+
+function findTaskFuzzy(tasks: Task[], target: string): Task | undefined {
+  const t = target.toLowerCase();
+  return tasks.find((task) => {
+    const title = task.title.toLowerCase();
+    return (
+      title === t ||
+      title.includes(t) ||
+      // match if target contains meaningful portion of title (≥5 chars)
+      (title.length >= 5 && t.includes(title.slice(0, Math.min(title.length, 12))))
+    );
+  });
+}
+
+function findHabitFuzzy(habits: Habit[], target: string): Habit | undefined {
+  const t = target.toLowerCase();
+  return habits.find((h) => {
+    const name = h.name.toLowerCase();
+    return name === t || name.includes(t) || t.includes(name);
+  });
+}
+
+function resolveDate(details: string | null): Date | null {
+  if (!details) return null;
+  const lower = details.toLowerCase();
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (lower.includes("today")) return today;
+
+  if (lower.includes("tomorrow")) {
+    const d = new Date(today);
+    d.setDate(d.getDate() + 1);
+    return d;
+  }
+
+  const weekdays = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+  for (let i = 0; i < weekdays.length; i++) {
+    if (lower.includes(weekdays[i]!)) {
+      const d = new Date(today);
+      const diff = ((i - d.getDay() + 7) % 7) || 7;
+      d.setDate(d.getDate() + diff);
+      return d;
+    }
+  }
+
+  const parsed = new Date(details);
+  if (!isNaN(parsed.getTime())) {
+    parsed.setHours(0, 0, 0, 0);
+    return parsed;
+  }
+
+  return null;
 }
