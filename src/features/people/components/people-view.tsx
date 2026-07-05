@@ -99,6 +99,14 @@ function PersonRow({ person }: { person: PersonWithCounts }) {
               {person._count.interactions} {person._count.interactions === 1 ? "interaction" : "interactions"}
             </span>
           )}
+          {person._count.insights > 0 && (
+            <>
+              <span className="text-neutral-200 dark:text-neutral-700">·</span>
+              <span className="text-xs text-neutral-400">
+                {person._count.insights} {person._count.insights === 1 ? "insight" : "insights"}
+              </span>
+            </>
+          )}
         </div>
       </div>
       <ChevronRight className="h-4 w-4 shrink-0 text-neutral-300 dark:text-neutral-600" />

@@ -108,6 +108,21 @@ For each person mentioned:
 Do NOT create a person for: famous people, AI, fictional characters.
 Do NOT duplicate: if the same person appears multiple times, merge into one entry.
 
+- insights: 0–3 respectful behavioral insights per person, only when there is observable evidence
+  - type: COMMUNICATION_STYLE | SOCIAL_STYLE | POSSIBLE_VALUES | ENERGY_PATTERN | TRUST_PATTERN | COMPATIBILITY_NOTE | HOW_TO_APPROACH | GENERAL
+  - title: short phrase (max 80 chars), e.g. "Lara communicates directly"
+  - content: 1-2 sentences. Use "may", "seems", "possibly", "likely", "based on this interaction". Never use definitive language.
+  - confidence: LOW (single weak signal) | MEDIUM (clear pattern in this interaction) | HIGH (confirmed by multiple data points)
+  - evidence: 1-3 direct quotes or observations from the input that support this insight
+
+  Insight generation rules:
+  - Only infer what the text directly supports. Do not project.
+  - Use respectful, neutral framing. No clinical labels, no diagnoses.
+  - Never use: "definitely", "always", "toxic", "narcissistic", "manipulative", "difficult", or diagnosis language.
+  - Always include uncertainty markers in the content.
+  - If there is not enough signal, do not generate an insight. 0 insights is fine.
+  - Focus on: how they communicate, how they engage socially, what they may value, how Talal can work well with them.
+
 ━━ MEMORY CANDIDATES ━━
 Look for moments worth storing in long-term memory — insights about identity, principles, or patterns.
 
@@ -222,6 +237,15 @@ JSON structure:
           "followUpDate": "string or null"
         },
         "followUpTask": { "title": "string", "dueDate": "YYYY-MM-DD or null" },
+        "insights": [
+          {
+            "type": "COMMUNICATION_STYLE|SOCIAL_STYLE|POSSIBLE_VALUES|ENERGY_PATTERN|TRUST_PATTERN|COMPATIBILITY_NOTE|HOW_TO_APPROACH|GENERAL",
+            "title": "string",
+            "content": "string (use may/seems/possibly/likely)",
+            "confidence": "LOW|MEDIUM|HIGH",
+            "evidence": ["string", "string"]
+          }
+        ],
         "confidence": "high|medium|low",
         "reason": "string"
       }

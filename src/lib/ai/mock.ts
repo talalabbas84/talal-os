@@ -10,6 +10,7 @@ import type {
   RecommendationOutput,
   ReflectionResultOutput,
   PersonUpdateOutput,
+  PersonInsightItemOutput,
 } from "./schema";
 import type { Intent } from "@/lib/intelligence/types";
 
@@ -570,6 +571,7 @@ function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutpu
           followUpTask: null,
           confidence: "high",
           reason: `Detected interaction with ${name}.`,
+          insights: [],
         });
       }
     }
@@ -663,9 +665,157 @@ function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutpu
         : `Follow up with ${name}`;
       update.followUpTask = { title: followUpDesc, dueDate: null };
     }
+
+    // Generate insights from interaction text
+    update.insights = extractPersonInsights(text, name);
   }
 
   return Array.from(updates.values());
+}
+
+// ── Person insight extraction ─────────────────────────────────────────────────
+
+interface InsightPattern {
+  regex: RegExp;
+  type: PersonInsightItemOutput["type"];
+  buildInsight: (name: string, match: RegExpMatchArray, sentence: string) => PersonInsightItemOutput | null;
+}
+
+const INSIGHT_PATTERNS: InsightPattern[] = [
+  {
+    // Direct communication: "corrected the plan quickly", "very direct"
+    regex: /\b(?:very |quite |so )?direct(?:ly)?\b/i,
+    type: "COMMUNICATION_STYLE",
+    buildInsight: (name, _match, sentence) => ({
+      type: "COMMUNICATION_STYLE",
+      title: `${name} may communicate directly`,
+      content: `${name} seems to prefer direct, efficient communication. They may not need much preamble — getting to the point quickly likely works better.`,
+      confidence: "MEDIUM",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Corrective / efficiency signals
+    regex: /corrected|redirected|cut to|got straight to|jumped to the point/i,
+    type: "COMMUNICATION_STYLE",
+    buildInsight: (name, _match, sentence) => ({
+      type: "COMMUNICATION_STYLE",
+      title: `${name} may value efficiency in discussion`,
+      content: `Based on this interaction, ${name} possibly prefers to keep conversations focused and may redirect when things feel off track.`,
+      confidence: "LOW",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Warm in group
+    regex: /warm(?:ly)?\s+(?:in|with|around|to(?:ward)?)\s+(?:the\s+)?group|great with (?:people|others|the group)/i,
+    type: "SOCIAL_STYLE",
+    buildInsight: (name, _match, sentence) => ({
+      type: "SOCIAL_STYLE",
+      title: `${name} seems socially warm in groups`,
+      content: `${name} appears comfortable and warm in group settings. They may be energised by social interaction.`,
+      confidence: "MEDIUM",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Privacy signal
+    regex: /changed the topic|avoided|didn'?t want to talk about|deflected|got quiet/i,
+    type: "TRUST_PATTERN",
+    buildInsight: (name, _match, sentence) => ({
+      type: "TRUST_PATTERN",
+      title: `${name} may keep some topics private`,
+      content: `${name} seems to prefer keeping certain subjects private until deeper trust is established. Respecting that boundary may help the relationship develop naturally.`,
+      confidence: "LOW",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Energy / enthusiasm
+    regex: /\b(?:excited|enthusiastic|lit up|energised|passionate)\b/i,
+    type: "ENERGY_PATTERN",
+    buildInsight: (name, _match, sentence) => ({
+      type: "ENERGY_PATTERN",
+      title: `${name} shows enthusiasm about certain topics`,
+      content: `${name} appears to light up around topics they care about. Engaging them on those areas may deepen the connection.`,
+      confidence: "MEDIUM",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Overthinking dynamic
+    regex: /overthink|felt like i was overthinking|overexplain/i,
+    type: "HOW_TO_APPROACH",
+    buildInsight: (name, _match, _sentence) => ({
+      type: "HOW_TO_APPROACH",
+      title: `Avoid over-explaining with ${name}`,
+      content: `Based on this interaction, ${name} may prefer concise communication. Over-explaining might slow things down — trust them to ask if they need more detail.`,
+      confidence: "LOW",
+      evidence: [],
+    }),
+  },
+  {
+    // Detail orientation
+    regex: /\b(?:detail oriented|very thorough|very precise|asked lots of questions|wanted to know everything)\b/i,
+    type: "COMMUNICATION_STYLE",
+    buildInsight: (name, _match, sentence) => ({
+      type: "COMMUNICATION_STYLE",
+      title: `${name} may be detail-oriented`,
+      content: `${name} seems to pay close attention to details. Providing thorough information upfront may work better with them.`,
+      confidence: "MEDIUM",
+      evidence: [sentence.trim()],
+    }),
+  },
+  {
+    // Listening well
+    regex: /\b(?:listened well|really listened|good listener|let me finish|didn'?t interrupt)\b/i,
+    type: "SOCIAL_STYLE",
+    buildInsight: (name, _match, sentence) => ({
+      type: "SOCIAL_STYLE",
+      title: `${name} appears to be a good listener`,
+      content: `${name} seems to make space for others to speak. This may indicate they value being heard themselves — giving them that space likely builds trust.`,
+      confidence: "MEDIUM",
+      evidence: [sentence.trim()],
+    }),
+  },
+];
+
+function extractPersonInsights(text: string, name: string): PersonInsightItemOutput[] {
+  const insights: PersonInsightItemOutput[] = [];
+  const usedTypes = new Set<string>();
+  const sentences = splitSentences(text);
+
+  for (const sentence of sentences) {
+    if (!sentence.toLowerCase().includes(name.toLowerCase()) && insights.length === 0) {
+      // Allow global patterns even without name mention if we already have a person
+    }
+    for (const pattern of INSIGHT_PATTERNS) {
+      if (usedTypes.has(pattern.type)) continue;
+      const match = sentence.match(pattern.regex);
+      if (!match) continue;
+      const insight = pattern.buildInsight(name, match, sentence);
+      if (!insight) continue;
+      insights.push(insight);
+      usedTypes.add(pattern.type);
+      if (insights.length >= 3) return insights;
+    }
+  }
+
+  // Check for overthinking pattern without name in sentence
+  if (insights.length < 3 && !usedTypes.has("HOW_TO_APPROACH")) {
+    const overMatch = text.match(/\b(?:overthink|overexplain|felt like i was overthinking)\b/i);
+    if (overMatch) {
+      insights.push({
+        type: "HOW_TO_APPROACH",
+        title: `Consider being more concise with ${name}`,
+        content: `Based on this interaction, being more direct with ${name} may help — over-explaining could slow things down.`,
+        confidence: "LOW",
+        evidence: [overMatch[0]],
+      });
+    }
+  }
+
+  return insights;
 }
 
 // ── Intent classification ─────────────────────────────────────────────────────

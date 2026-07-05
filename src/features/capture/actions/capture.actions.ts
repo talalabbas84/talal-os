@@ -66,6 +66,7 @@ export interface CreateSaveInput {
     memories: boolean[];
     commands: boolean[];
     people: boolean[];
+    personInsights: boolean[][];
     journal: boolean;
   };
   memoryEdits: Record<number, { title: string; content: string }>;

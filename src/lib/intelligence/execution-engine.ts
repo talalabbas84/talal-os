@@ -25,6 +25,7 @@ export async function executeActions(
     userStateUpdated: false,
     commandsExecuted: 0,
     peopleUpdated: 0,
+    insightsSaved: 0,
   };
 
   // Prefetch for fuzzy matching (only if needed)
@@ -330,6 +331,22 @@ export async function executeActions(
               energyRequired: "LOW",
             },
           });
+        }
+
+        // Create PersonInsight entries
+        for (const ins of payload.insights) {
+          await prisma.personInsight.create({
+            data: {
+              userId,
+              personId: person.id,
+              type: ins.type as Parameters<typeof prisma.personInsight.create>[0]["data"]["type"],
+              title: ins.title,
+              content: ins.content,
+              confidence: ins.confidence as Parameters<typeof prisma.personInsight.create>[0]["data"]["confidence"],
+              evidence: ins.evidence,
+            },
+          });
+          result.insightsSaved++;
         }
 
         result.peopleUpdated++;

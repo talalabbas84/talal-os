@@ -19,6 +19,7 @@ export type {
   PersonUpdateOutput,
   PersonMemoryItemOutput,
   PersonInteractionItemOutput,
+  PersonInsightItemOutput,
 } from "./schema";
 
 // The single contract every provider must implement.

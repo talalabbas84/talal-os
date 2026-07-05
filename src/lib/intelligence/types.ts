@@ -110,6 +110,14 @@ export interface JournalPayload {
   improveTomorrow?: string;
 }
 
+export interface PersonInsightPayload {
+  type: string;
+  title: string;
+  content: string;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  evidence: string[];
+}
+
 export interface PersonMemoryItemPayload {
   title: string;
   content: string;
@@ -143,6 +151,7 @@ export interface PersonUpdatePayload {
   memories: PersonMemoryItemPayload[];
   interaction: PersonInteractionPayload | null;
   followUpTask: { title: string; dueDate: string | null } | null;
+  insights: PersonInsightPayload[];
 }
 
 export interface UserStatePayload {
@@ -243,4 +252,5 @@ export interface ExecutionResult {
   userStateUpdated: boolean;
   commandsExecuted: number;
   peopleUpdated: number;
+  insightsSaved: number;
 }

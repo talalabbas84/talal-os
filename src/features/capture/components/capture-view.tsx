@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
-import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
+import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput, PersonInsightItemOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
@@ -43,6 +43,7 @@ interface CreateInclusion {
   memories: boolean[];
   commands: boolean[];
   people: boolean[];
+  personInsights: boolean[][];   // [personIndex][insightIndex]
   journal: boolean;
 }
 
@@ -93,6 +94,9 @@ export function CaptureView({ userName }: { userName: string }) {
           memories: d.memoryCandidates.map((m) => m.importance === "PERMANENT" || m.importance === "HIGH"),
           commands: d.commands.map((c) => c.confidence !== "low"),
           people: d.peopleUpdates.map((p) => p.confidence !== "low"),
+          personInsights: d.peopleUpdates.map((p) =>
+            p.insights.map((ins) => ins.confidence !== "LOW"),
+          ),
           journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
         });
         setActionInclusion(null);
@@ -116,12 +120,23 @@ export function CaptureView({ userName }: { userName: string }) {
     setMemoryEdits({});
   }
 
-  function toggleCreateItem(key: keyof Omit<CreateInclusion, "journal">, index: number) {
+  function toggleCreateItem(key: keyof Omit<CreateInclusion, "journal" | "personInsights">, index: number) {
     setCreateInclusion((prev) => {
       if (!prev) return prev;
       const arr = [...prev[key]];
       arr[index] = !arr[index];
       return { ...prev, [key]: arr };
+    });
+  }
+
+  function togglePersonInsight(personIndex: number, insightIndex: number) {
+    setCreateInclusion((prev) => {
+      if (!prev) return prev;
+      const outer = prev.personInsights.map((row) => [...row]);
+      const row = outer[personIndex] ?? [];
+      row[insightIndex] = !row[insightIndex];
+      outer[personIndex] = row;
+      return { ...prev, personInsights: outer };
     });
   }
 
@@ -204,6 +219,7 @@ export function CaptureView({ userName }: { userName: string }) {
           memoryEdits={memoryEdits}
           onToggleCreate={toggleCreateItem}
           onToggleCreateJournal={() => setCreateInclusion((p) => p && { ...p, journal: !p.journal })}
+          onTogglePersonInsight={togglePersonInsight}
           onToggleAction={toggleAction}
           onMemorySaveEdit={handleMemorySaveEdit}
           onEdit={handleRetry}
@@ -285,15 +301,16 @@ function InputView({
 
 function PreviewView({
   result, createInclusion, actionInclusion, memoryEdits,
-  onToggleCreate, onToggleCreateJournal, onToggleAction, onMemorySaveEdit,
+  onToggleCreate, onToggleCreateJournal, onTogglePersonInsight, onToggleAction, onMemorySaveEdit,
   onEdit, onSave, isSaving, error,
 }: {
   result: PipelineResult;
   createInclusion: CreateInclusion | null;
   actionInclusion: ActionInclusion | null;
   memoryEdits: Record<number, MemoryEdit>;
-  onToggleCreate: (key: keyof Omit<CreateInclusion, "journal">, index: number) => void;
+  onToggleCreate: (key: keyof Omit<CreateInclusion, "journal" | "personInsights">, index: number) => void;
   onToggleCreateJournal: () => void;
+  onTogglePersonInsight: (personIndex: number, insightIndex: number) => void;
   onToggleAction: (index: number) => void;
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
   onEdit: () => void;
@@ -310,6 +327,7 @@ function PreviewView({
       createInclusion.memories.filter(Boolean).length +
       createInclusion.commands.filter(Boolean).length +
       createInclusion.people.filter(Boolean).length +
+      createInclusion.personInsights.reduce((sum, row) => sum + row.filter(Boolean).length, 0) +
       (createInclusion.journal ? 1 : 0)
     : actionInclusion
     ? actionInclusion.filter(Boolean).length
@@ -328,6 +346,7 @@ function PreviewView({
           memoryEdits={memoryEdits}
           onToggle={onToggleCreate}
           onToggleJournal={onToggleCreateJournal}
+          onTogglePersonInsight={onTogglePersonInsight}
           onMemorySaveEdit={onMemorySaveEdit}
         />
       )}
@@ -464,13 +483,14 @@ function IntentBadge({ intentResult }: { intentResult: { intent: string; confide
 // ── CREATE preview ────────────────────────────────────────────────────────────
 
 function CreatePreview({
-  capture, inclusion, memoryEdits, onToggle, onToggleJournal, onMemorySaveEdit,
+  capture, inclusion, memoryEdits, onToggle, onToggleJournal, onTogglePersonInsight, onMemorySaveEdit,
 }: {
   capture: import("@/lib/ai/types").CaptureResult;
   inclusion: CreateInclusion;
   memoryEdits: Record<number, MemoryEdit>;
-  onToggle: (key: keyof Omit<CreateInclusion, "journal">, index: number) => void;
+  onToggle: (key: keyof Omit<CreateInclusion, "journal" | "personInsights">, index: number) => void;
   onToggleJournal: () => void;
+  onTogglePersonInsight: (personIndex: number, insightIndex: number) => void;
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
 }) {
   const d = capture.data;
@@ -580,7 +600,11 @@ function CreatePreview({
         <Section icon={Users} title="People" count={d.peopleUpdates.length} note="→ Relationship memory">
           {d.peopleUpdates.map((person, i) => (
             <ItemRow key={i} included={!!inclusion.people[i]} onToggle={() => onToggle("people", i)} confidence={person.confidence} alwaysShowToggle>
-              <PersonUpdateCard person={person} />
+              <PersonUpdateCard
+                person={person}
+                insightInclusion={inclusion.personInsights[i] ?? []}
+                onToggleInsight={(j) => onTogglePersonInsight(i, j)}
+              />
             </ItemRow>
           ))}
         </Section>
@@ -855,6 +879,7 @@ function SavedView({
     result.memoriesSaved > 0 && `${result.memoriesSaved} memor${result.memoriesSaved !== 1 ? "ies" : "y"} saved`,
     result.commandsExecuted > 0 && `${result.commandsExecuted} action${result.commandsExecuted !== 1 ? "s" : ""} executed`,
     result.peopleUpdated > 0 && `${result.peopleUpdated} person record${result.peopleUpdated !== 1 ? "s" : ""} updated`,
+    result.insightsSaved > 0 && `${result.insightsSaved} insight${result.insightsSaved !== 1 ? "s" : ""} saved`,
     result.userStateUpdated && "State updated",
   ].filter(Boolean) as string[];
 
@@ -1126,7 +1151,28 @@ const PERSON_MEMORY_TYPE_LABELS: Record<string, string> = {
   IMPORTANT_EVENT: "Event", FOLLOW_UP: "Follow Up", GENERAL: "Note",
 };
 
-function PersonUpdateCard({ person }: { person: PersonUpdateOutput }) {
+const INSIGHT_TYPE_LABELS: Record<string, string> = {
+  COMMUNICATION_STYLE: "Comm Style", SOCIAL_STYLE: "Social",
+  POSSIBLE_VALUES: "Values", ENERGY_PATTERN: "Energy",
+  TRUST_PATTERN: "Trust", COMPATIBILITY_NOTE: "Compatibility",
+  HOW_TO_APPROACH: "Approach", GENERAL: "General",
+};
+
+const INSIGHT_CONFIDENCE_STYLES: Record<string, string> = {
+  HIGH: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
+  MEDIUM: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
+  LOW: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
+};
+
+function PersonUpdateCard({
+  person,
+  insightInclusion,
+  onToggleInsight,
+}: {
+  person: PersonUpdateOutput;
+  insightInclusion: boolean[];
+  onToggleInsight: (insightIndex: number) => void;
+}) {
   const pd = person.personData;
   const facts = [
     pd.relationshipType,
@@ -1136,7 +1182,7 @@ function PersonUpdateCard({ person }: { person: PersonUpdateOutput }) {
   ].filter(Boolean) as string[];
 
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-2">
       <div className="flex items-center gap-2">
         <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{person.personName}</p>
         {facts.length > 0 && (
@@ -1164,6 +1210,53 @@ function PersonUpdateCard({ person }: { person: PersonUpdateOutput }) {
       )}
       {person.followUpTask && (
         <p className="text-xs text-amber-600 dark:text-amber-400">Follow-up: {person.followUpTask.title}</p>
+      )}
+      {person.insights.length > 0 && (
+        <div className="mt-2 space-y-1.5 border-t border-neutral-100 pt-2 dark:border-neutral-800">
+          <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">AI Insights</p>
+          {person.insights.map((ins, j) => (
+            <div
+              key={j}
+              className={cn("flex items-start gap-2 rounded-lg p-2 transition-opacity",
+                insightInclusion[j] ? "bg-neutral-50 dark:bg-neutral-800/50" : "opacity-40",
+              )}
+            >
+              <button
+                onClick={() => onToggleInsight(j)}
+                className={cn(
+                  "mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors",
+                  insightInclusion[j]
+                    ? "border-neutral-900 bg-neutral-900 dark:border-neutral-50 dark:bg-neutral-50"
+                    : "border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900",
+                )}
+                aria-label={insightInclusion[j] ? "Exclude insight" : "Include insight"}
+              >
+                {insightInclusion[j] && (
+                  <svg viewBox="0 0 16 16" fill="none" className="h-full w-full p-0.5">
+                    <path d="M3 8l3.5 3.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+              <div className="min-w-0 flex-1 space-y-0.5">
+                <div className="flex flex-wrap items-center gap-1">
+                  <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider", INSIGHT_CONFIDENCE_STYLES[ins.confidence] ?? "")}>
+                    {ins.confidence}
+                  </span>
+                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[9px] text-neutral-500 dark:bg-neutral-800">
+                    {INSIGHT_TYPE_LABELS[ins.type] ?? ins.type}
+                  </span>
+                </div>
+                <p className="text-xs font-medium text-neutral-900 dark:text-neutral-50">{ins.title}</p>
+                <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">{ins.content}</p>
+                {ins.evidence.length > 0 && (
+                  <p className="text-[10px] italic text-neutral-400">
+                    Evidence: {ins.evidence.map((e) => `"${e}"`).join(", ")}
+                  </p>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );

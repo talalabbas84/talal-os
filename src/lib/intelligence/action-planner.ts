@@ -10,6 +10,7 @@ import type {
   ReminderPayload,
   ProjectPayload,
   PersonUpdatePayload,
+  PersonInsightPayload,
   Recommendation,
   ReflectionData,
   PlanSummary,
@@ -39,6 +40,7 @@ export function planFromCapture(
     memories: boolean[];
     commands: boolean[];
     people: boolean[];
+    personInsights: boolean[][];
     journal: boolean;
   },
   memoryEdits: Record<number, { title: string; content: string }>,
@@ -114,7 +116,8 @@ export function planFromCapture(
 
   d.peopleUpdates.forEach((p, i) => {
     if (!inclusion.people[i]) return;
-    actions.push(...planFromPersonUpdate(p));
+    const approvedInsights = p.insights.filter((_, j) => inclusion.personInsights[i]?.[j] ?? false);
+    actions.push(...planFromPersonUpdate({ ...p, insights: approvedInsights }));
   });
 
   return actions;
@@ -222,13 +225,14 @@ export function planFromMemoryCandidates(candidates: MemoryCandidateOutput[]): P
 
 // ── From PEOPLE updates ───────────────────────────────────────────────────────
 
-export function planFromPersonUpdate(p: PersonUpdateOutput): PlannedAction[] {
+export function planFromPersonUpdate(p: PersonUpdateOutput & { insights?: PersonInsightPayload[] }): PlannedAction[] {
   const payload: PersonUpdatePayload = {
     personName: p.personName,
     personData: p.personData,
     memories: p.memories,
     interaction: p.interaction,
     followUpTask: p.followUpTask,
+    insights: p.insights ?? [],
   };
   return [{ id: nextId("person"), type: "CREATE_PERSON_UPDATE", label: `Person: ${p.personName}`, payload }];
 }

@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/lib/auth";
 import type { ActionResult } from "@/types";
-import type { Person, PersonMemory, PersonInteraction } from "@prisma/client";
+import type { Person, PersonMemory, PersonInteraction, PersonInsight } from "@prisma/client";
 
 async function requireUserId(): Promise<string> {
   const session = await auth();
@@ -13,12 +13,13 @@ async function requireUserId(): Promise<string> {
 }
 
 export type PersonWithCounts = Person & {
-  _count: { memories: number; interactions: number };
+  _count: { memories: number; interactions: number; insights: number };
 };
 
 export type PersonWithAll = Person & {
   memories: PersonMemory[];
   interactions: PersonInteraction[];
+  insights: PersonInsight[];
 };
 
 // ── List ──────────────────────────────────────────────────────────────────────
@@ -29,7 +30,7 @@ export async function getPeople(): Promise<ActionResult<PersonWithCounts[]>> {
     const people = await prisma.person.findMany({
       where: { userId },
       orderBy: { name: "asc" },
-      include: { _count: { select: { memories: true, interactions: true } } },
+      include: { _count: { select: { memories: true, interactions: true, insights: true } } },
     });
     return { success: true, data: people };
   } catch {
@@ -47,6 +48,7 @@ export async function getPerson(personId: string): Promise<ActionResult<PersonWi
       include: {
         memories: { orderBy: { createdAt: "desc" } },
         interactions: { orderBy: { date: "desc" } },
+        insights: { orderBy: { createdAt: "desc" } },
       },
     });
     if (!person) return { success: false, error: "Person not found." };
@@ -222,5 +224,23 @@ export async function deletePersonInteraction(
     return { success: true, data: undefined };
   } catch {
     return { success: false, error: "Failed to delete interaction." };
+  }
+}
+
+// ── Person insights ───────────────────────────────────────────────────────────
+
+export async function deletePersonInsight(
+  insightId: string,
+  personId: string,
+): Promise<ActionResult<void>> {
+  try {
+    const userId = await requireUserId();
+    const insight = await prisma.personInsight.findFirst({ where: { id: insightId, userId } });
+    if (!insight) return { success: false, error: "Insight not found." };
+    await prisma.personInsight.delete({ where: { id: insightId } });
+    revalidatePath(`/people/${personId}`);
+    return { success: true, data: undefined };
+  } catch {
+    return { success: false, error: "Failed to delete insight." };
   }
 }

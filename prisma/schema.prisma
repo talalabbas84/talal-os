@@ -24,6 +24,7 @@ model User {
   people            Person[]
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
+  personInsights    PersonInsight[]
 }
 
 model UserState {
@@ -199,9 +200,30 @@ model Person {
   user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
   interactions PersonInteraction[]
   memories     PersonMemory[]
+  insights     PersonInsight[]
 
   @@index([userId])
   @@index([name])
+}
+
+model PersonInsight {
+  id         String        @id @default(cuid())
+  type       InsightType
+  title      String
+  content    String
+  confidence Level
+  evidence   String[]      @default([])
+  createdAt  DateTime      @default(now())
+  updatedAt  DateTime      @updatedAt
+
+  userId   String
+  user     User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  personId String
+  person   Person @relation(fields: [personId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([personId])
+  @@index([type])
 }
 
 model PersonInteraction {
@@ -263,6 +285,17 @@ enum PersonMemorySource {
   CAPTURE
   MANUAL
   INTERACTION
+}
+
+enum InsightType {
+  COMMUNICATION_STYLE
+  SOCIAL_STYLE
+  POSSIBLE_VALUES
+  ENERGY_PATTERN
+  TRUST_PATTERN
+  COMPATIBILITY_NOTE
+  HOW_TO_APPROACH
+  GENERAL
 }
 
 // ── Enums ──────────────────────────────────────────────────────────────────────

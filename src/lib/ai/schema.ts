@@ -115,6 +115,22 @@ export const PERSON_MEMORY_TYPES = [
   "COMMUNICATION_STYLE", "IMPORTANT_EVENT", "FOLLOW_UP", "GENERAL",
 ] as const;
 
+export const INSIGHT_TYPES = [
+  "COMMUNICATION_STYLE", "SOCIAL_STYLE", "POSSIBLE_VALUES",
+  "ENERGY_PATTERN", "TRUST_PATTERN", "COMPATIBILITY_NOTE",
+  "HOW_TO_APPROACH", "GENERAL",
+] as const;
+
+export const INSIGHT_CONFIDENCES = ["LOW", "MEDIUM", "HIGH"] as const;
+
+export const personInsightItemSchema = z.object({
+  type: z.enum(INSIGHT_TYPES),
+  title: z.string().min(1).max(255),
+  content: z.string().min(1),
+  confidence: z.enum(INSIGHT_CONFIDENCES),
+  evidence: z.array(z.string()).default([]),
+});
+
 export const personDataSchema = z.object({
   nickname: z.string().nullable().default(null),
   relationshipType: z.string().nullable().default(null),
@@ -161,6 +177,7 @@ export const personUpdateSchema = z.object({
   memories: z.array(personMemoryItemSchema).default([]),
   interaction: personInteractionItemSchema.nullable().default(null),
   followUpTask: followUpTaskItemSchema.nullable().default(null),
+  insights: z.array(personInsightItemSchema).default([]),
   confidence: confidenceSchema.default("high"),
   reason: z.string().min(1),
 });
@@ -242,4 +259,5 @@ export type RecommendationOutput = z.infer<typeof recommendationSchema>;
 export type ReflectionResultOutput = z.infer<typeof reflectionResultSchema>;
 export type PersonUpdateOutput = z.infer<typeof personUpdateSchema>;
 export type PersonMemoryItemOutput = z.infer<typeof personMemoryItemSchema>;
+export type PersonInsightItemOutput = z.infer<typeof personInsightItemSchema>;
 export type PersonInteractionItemOutput = z.infer<typeof personInteractionItemSchema>;
