@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { TaskWithProject } from "@/types";
-import type { FollowUpType, GrowthCategory, Level } from "@prisma/client";
+import type { FollowUpType, GrowthCategory, LearningCategory, Level } from "@prisma/client";
 
 export interface DailyPlan {
   date: Date;
@@ -20,6 +20,7 @@ export interface DailyPlan {
   suggestion: string;
   followUps: FollowUpSummary[];
   todaysQuestions: TodayQuestion[];
+  dueLearningItems: DueLearningItem[];
   inboxCount: number;
   recentReflection: {
     feeling: string | null;
@@ -46,6 +47,13 @@ export interface TodayQuestion {
   priority: Level;
 }
 
+export interface DueLearningItem {
+  id: string;
+  title: string;
+  category: LearningCategory;
+  nextReviewAt: Date | null;
+}
+
 interface MorningPlanningOptions {
   persist: boolean;
 }
@@ -68,6 +76,7 @@ export async function buildMorningPlan(
     recentCaptures,
     openFollowUps,
     todaysQuestions,
+    dueLearningItems,
     personInteractions,
     todayLog,
     recentLog,
@@ -120,6 +129,15 @@ export async function buildMorningPlan(
       where: { userId, status: "OPEN" },
       orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
       take: 3,
+    }),
+    prisma.learningItem.findMany({
+      where: {
+        userId,
+        masteryLevel: { not: "MASTERED" },
+        OR: [{ nextReviewAt: null }, { nextReviewAt: { lte: new Date() } }],
+      },
+      orderBy: [{ nextReviewAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
+      take: 5,
     }),
     prisma.personInteraction.findMany({
       where: { userId, followUpNeeded: true },
@@ -231,6 +249,12 @@ export async function buildMorningPlan(
       question: question.question,
       reason: question.reason,
       priority: question.priority,
+    })),
+    dueLearningItems: dueLearningItems.map((item) => ({
+      id: item.id,
+      title: item.title,
+      category: item.category,
+      nextReviewAt: item.nextReviewAt,
     })),
     inboxCount,
     recentReflection: recentLog

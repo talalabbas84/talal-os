@@ -25,6 +25,9 @@ model User {
   followUps         FollowUp[]
   growthItems       GrowthItem[]
   followUpQuestions FollowUpQuestion[]
+  thoughts          Thought[]
+  learningItems     LearningItem[]
+  reviewSessions    ReviewSession[]
   people            Person[]
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
@@ -223,6 +226,86 @@ model FollowUpQuestion {
   @@index([priority])
   @@index([status])
   @@index([relatedEntityType, relatedEntityId])
+}
+
+model Thought {
+  id                String           @id @default(cuid())
+  rawText           String
+  cleanedText       String
+  summary           String
+  category          ThoughtCategory
+  emotionalTone     String?
+  importance        MemoryImportance @default(MEDIUM)
+  relatedPeopleIds  String[]         @default([])
+  relatedProjectId  String?
+  source            ThoughtSource    @default(CAPTURE)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([importance])
+  @@index([createdAt])
+}
+
+model LearningItem {
+  id              String                @id @default(cuid())
+  title           String
+  content         String
+  category        LearningCategory
+  source          LearningSource        @default(CAPTURE)
+  difficulty      Level                 @default(MEDIUM)
+  masteryLevel    LearningMasteryLevel  @default(NEW)
+  lastReviewedAt  DateTime?
+  nextReviewAt    DateTime?
+  reviewCount     Int                   @default(0)
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers ReviewAnswer[]
+
+  @@index([userId])
+  @@index([category])
+  @@index([masteryLevel])
+  @@index([nextReviewAt])
+}
+
+model ReviewSession {
+  id        String            @id @default(cuid())
+  date      DateTime          @db.Date
+  category  LearningCategory?
+  score     Int?
+  createdAt DateTime          @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers ReviewAnswer[]
+
+  @@index([userId])
+  @@index([date])
+  @@index([category])
+}
+
+model ReviewAnswer {
+  id             String           @id @default(cuid())
+  prompt         String
+  answer         String
+  selfRating     ReviewSelfRating
+  createdAt      DateTime         @default(now())
+
+  reviewSessionId String
+  reviewSession   ReviewSession @relation(fields: [reviewSessionId], references: [id], onDelete: Cascade)
+
+  learningItemId String
+  learningItem   LearningItem  @relation(fields: [learningItemId], references: [id], onDelete: Cascade)
+
+  @@index([reviewSessionId])
+  @@index([learningItemId])
 }
 
 model Habit {
@@ -482,6 +565,57 @@ enum FollowUpQuestionStatus {
   OPEN
   ANSWERED
   DISMISSED
+}
+
+enum ThoughtCategory {
+  SELF_INSIGHT
+  IDEA
+  FEAR
+  GOAL
+  OBSERVATION
+  RELATIONSHIP
+  BUSINESS
+  HEALTH
+  LEARNING
+  RANDOM
+}
+
+enum ThoughtSource {
+  CAPTURE
+  MANUAL
+  VOICE
+}
+
+enum LearningCategory {
+  VOCABULARY
+  DANCE
+  PUBLIC_SPEAKING
+  ACCENT
+  SOFTWARE
+  FINANCE
+  FITNESS
+  BOOK
+  BUSINESS
+  OTHER
+}
+
+enum LearningSource {
+  CAPTURE
+  MANUAL
+}
+
+enum LearningMasteryLevel {
+  NEW
+  LEARNING
+  REVIEWING
+  MASTERED
+}
+
+enum ReviewSelfRating {
+  AGAIN
+  HARD
+  GOOD
+  EASY
 }
 
 enum MemoryType {

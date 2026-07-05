@@ -22,6 +22,7 @@ import {
   planFromSmartCaptureShortcut,
 } from "./action-planner";
 import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
+import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-learning-engine";
 import type { PipelineResult, IntentResult } from "./types";
 
 // processCapture: main entry — classifies intent then runs the right workflow.
@@ -60,12 +61,18 @@ export async function processCapture(
       const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const commands = capture.data.commands;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
+      const thoughtLearningActions = planThoughtAndLearningFromCapture({
+        rawText: articulation.original,
+        cleanedText: articulatedText,
+        capture,
+        skipThought: isDirectCommand(articulatedText, capture),
+      });
       return {
         articulation,
         intent: "UPDATE",
         intentResult,
         commands,
-        actions: [...planFromCommands(commands), ...growthActions],
+        actions: [...planFromCommands(commands), ...thoughtLearningActions, ...growthActions],
       };
     }
 
@@ -135,12 +142,17 @@ export async function processCapture(
       const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const candidates = capture.data.memoryCandidates;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
+      const thoughtLearningActions = planThoughtAndLearningFromCapture({
+        rawText: articulation.original,
+        cleanedText: articulatedText,
+        capture,
+      });
       return {
         articulation,
         intent: "MEMORY",
         intentResult,
         candidates,
-        actions: [...planFromMemoryCandidates(candidates), ...growthActions],
+        actions: [...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions],
       };
     }
 
@@ -166,13 +178,19 @@ export async function processCapture(
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       };
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
+      const thoughtLearningActions = planThoughtAndLearningFromCapture({
+        rawText: articulation.original,
+        cleanedText: articulatedText,
+        capture,
+        skipThought: isDirectCommand(articulatedText, capture),
+      });
       return {
         articulation,
         intent: intentResult.intent as "CREATE" | "UNKNOWN",
         intentResult,
         capture,
         // Pre-computed actions from default inclusion — capture-view will recompute on save
-        actions: [...planFromCapture(capture, defaultInclusion, {}), ...growthActions],
+        actions: [...planFromCapture(capture, defaultInclusion, {}), ...thoughtLearningActions, ...growthActions],
       };
     }
   }

@@ -141,6 +141,34 @@ export default async function DashboardPage() {
             </CardContent>
           </Card>
 
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <BookOpen className="h-4 w-4" />
+                Today&apos;s Review
+              </CardTitle>
+              <Button asChild variant="outline" size="sm" disabled={plan.dueLearningItems.length === 0}>
+                <Link href="/learn/review">Start Review</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {plan.dueLearningItems.length === 0 ? (
+                <EmptyLine text="No learning reviews due." />
+              ) : (
+                plan.dueLearningItems.map((item) => (
+                  <Link
+                    key={item.id}
+                    href="/learn/review"
+                    className="flex items-center justify-between rounded-lg bg-neutral-50 p-3 text-sm hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+                  >
+                    <span className="font-medium text-neutral-800 dark:text-neutral-200">{item.title}</span>
+                    <span className="text-xs text-neutral-400">{formatCategory(item.category)}</span>
+                  </Link>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
           <DashboardTopTasks tasks={plan.topTasks} />
         </div>
 

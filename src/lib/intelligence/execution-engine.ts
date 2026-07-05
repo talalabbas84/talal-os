@@ -20,7 +20,9 @@ export async function executeActions(
     memoriesSaved: 0,
     remindersCreated: 0,
     followUpsCreated: 0,
+    thoughtsSaved: 0,
     growthItemsCreated: 0,
+    learningItemsCreated: 0,
     questionsCreated: 0,
     questionsAnswered: 0,
     projectsCreated: 0,
@@ -140,6 +142,26 @@ export async function executeActions(
         break;
       }
 
+      case "CREATE_THOUGHT": {
+        const { payload } = action;
+        await prisma.thought.create({
+          data: {
+            userId,
+            rawText: payload.rawText,
+            cleanedText: payload.cleanedText,
+            summary: payload.summary,
+            category: payload.category,
+            emotionalTone: payload.emotionalTone ?? null,
+            importance: payload.importance,
+            relatedPeopleIds: payload.relatedPeopleIds ?? [],
+            relatedProjectId: payload.relatedProjectId ?? null,
+            source: payload.source,
+          },
+        });
+        result.thoughtsSaved++;
+        break;
+      }
+
       case "CREATE_GROWTH_ITEM": {
         const { payload } = action;
         const existing = await prisma.growthItem.findFirst({
@@ -176,6 +198,44 @@ export async function executeActions(
             },
           });
           result.growthItemsCreated++;
+        }
+        break;
+      }
+
+      case "CREATE_LEARNING_ITEM": {
+        const { payload } = action;
+        const existing = await prisma.learningItem.findFirst({
+          where: {
+            userId,
+            category: payload.category,
+            title: { equals: payload.title, mode: "insensitive" },
+          },
+        });
+
+        if (existing) {
+          await prisma.learningItem.update({
+            where: { id: existing.id },
+            data: {
+              content: payload.content,
+              difficulty: payload.difficulty,
+              masteryLevel: existing.masteryLevel === "MASTERED" ? "MASTERED" : payload.masteryLevel,
+              nextReviewAt: parseDate(payload.nextReviewAt) ?? existing.nextReviewAt,
+            },
+          });
+        } else {
+          await prisma.learningItem.create({
+            data: {
+              userId,
+              title: payload.title,
+              content: payload.content,
+              category: payload.category,
+              source: payload.source,
+              difficulty: payload.difficulty,
+              masteryLevel: payload.masteryLevel,
+              nextReviewAt: parseDate(payload.nextReviewAt),
+            },
+          });
+          result.learningItemsCreated++;
         }
         break;
       }

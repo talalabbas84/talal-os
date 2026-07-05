@@ -6,6 +6,7 @@ import { processCapture as runPipeline } from "@/lib/intelligence/decision-engin
 import { executeActions } from "@/lib/intelligence/execution-engine";
 import { planFromCapture } from "@/lib/intelligence/action-planner";
 import { planGrowthFromCapture } from "@/lib/intelligence/growth-engine";
+import { isDirectCommand, planThoughtAndLearningFromCapture } from "@/lib/intelligence/thought-learning-engine";
 import type { ActionResult } from "@/types";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
 
@@ -79,8 +80,15 @@ export async function saveCreateCapture(
   try {
     const userId = await requireUserId();
     const growthActions = await planGrowthFromCapture(userId, input.capture.articulation.articulated, input.capture.capture);
+    const thoughtLearningActions = planThoughtAndLearningFromCapture({
+      rawText: input.capture.articulation.original,
+      cleanedText: input.capture.articulation.articulated,
+      capture: input.capture.capture,
+      skipThought: isDirectCommand(input.capture.articulation.articulated, input.capture.capture),
+    });
     const actions = [
       ...planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits),
+      ...thoughtLearningActions,
       ...growthActions,
     ];
     if (!actions.length) return { success: false, error: "Nothing selected to save." };
@@ -101,6 +109,8 @@ function revalidateAll() {
   revalidatePath("/projects");
   revalidatePath("/memory");
   revalidatePath("/people");
+  revalidatePath("/thoughts");
+  revalidatePath("/learn");
   revalidatePath("/capture");
   revalidatePath("/");
 }

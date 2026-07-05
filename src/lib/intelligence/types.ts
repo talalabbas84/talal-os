@@ -44,7 +44,9 @@ export const ACTION_TYPES = [
   "CREATE_MEMORY",
   "CREATE_REMINDER",
   "CREATE_FOLLOW_UP",
+  "CREATE_THOUGHT",
   "CREATE_GROWTH_ITEM",
+  "CREATE_LEARNING_ITEM",
   "CREATE_FOLLOW_UP_QUESTION",
   "CREATE_PROJECT",
   "CREATE_PERSON_UPDATE",
@@ -69,7 +71,9 @@ export type PlannedAction =
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
   | { id: string; type: "CREATE_FOLLOW_UP"; label: string; payload: FollowUpPayload }
+  | { id: string; type: "CREATE_THOUGHT"; label: string; payload: ThoughtPayload }
   | { id: string; type: "CREATE_GROWTH_ITEM"; label: string; payload: GrowthItemPayload }
+  | { id: string; type: "CREATE_LEARNING_ITEM"; label: string; payload: LearningItemPayload }
   | { id: string; type: "CREATE_FOLLOW_UP_QUESTION"; label: string; payload: FollowUpQuestionPayload }
   | { id: string; type: "CREATE_PROJECT"; label: string; payload: ProjectPayload }
   | { id: string; type: "CREATE_PERSON_UPDATE"; label: string; payload: PersonUpdatePayload }
@@ -127,6 +131,30 @@ export interface FollowUpPayload {
   createdFrom?: string | null;
 }
 
+export type ThoughtCategory =
+  | "SELF_INSIGHT"
+  | "IDEA"
+  | "FEAR"
+  | "GOAL"
+  | "OBSERVATION"
+  | "RELATIONSHIP"
+  | "BUSINESS"
+  | "HEALTH"
+  | "LEARNING"
+  | "RANDOM";
+
+export interface ThoughtPayload {
+  rawText: string;
+  cleanedText: string;
+  summary: string;
+  category: ThoughtCategory;
+  emotionalTone?: string | null;
+  importance: "LOW" | "MEDIUM" | "HIGH" | "PERMANENT";
+  relatedPeopleIds?: string[];
+  relatedProjectId?: string | null;
+  source: "CAPTURE" | "MANUAL" | "VOICE";
+}
+
 export type GrowthCategory =
   | "VOCABULARY"
   | "DANCE"
@@ -141,6 +169,28 @@ export type GrowthCategory =
   | "OTHER";
 
 export type GrowthStage = "LEARNED" | "PRACTICING" | "REVIEWING" | "MASTERED";
+
+export type LearningCategory =
+  | "VOCABULARY"
+  | "DANCE"
+  | "PUBLIC_SPEAKING"
+  | "ACCENT"
+  | "SOFTWARE"
+  | "FINANCE"
+  | "FITNESS"
+  | "BOOK"
+  | "BUSINESS"
+  | "OTHER";
+
+export interface LearningItemPayload {
+  title: string;
+  content: string;
+  category: LearningCategory;
+  source: "CAPTURE" | "MANUAL";
+  difficulty: "LOW" | "MEDIUM" | "HIGH";
+  masteryLevel: "NEW" | "LEARNING" | "REVIEWING" | "MASTERED";
+  nextReviewAt?: string | null;
+}
 
 export interface GrowthItemPayload {
   category: GrowthCategory;
@@ -324,7 +374,9 @@ export interface ExecutionResult {
   memoriesSaved: number;
   remindersCreated: number;
   followUpsCreated: number;
+  thoughtsSaved: number;
   growthItemsCreated: number;
+  learningItemsCreated: number;
   questionsCreated: number;
   questionsAnswered: number;
   projectsCreated: number;
