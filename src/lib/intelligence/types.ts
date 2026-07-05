@@ -44,6 +44,8 @@ export const ACTION_TYPES = [
   "CREATE_MEMORY",
   "CREATE_REMINDER",
   "CREATE_FOLLOW_UP",
+  "CREATE_THOUGHT_UNIT",
+  "CREATE_ACTIVITY_LOG",
   "CREATE_THOUGHT",
   "CREATE_GROWTH_ITEM",
   "CREATE_LEARNING_ITEM",
@@ -71,6 +73,8 @@ export type PlannedAction =
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
   | { id: string; type: "CREATE_FOLLOW_UP"; label: string; payload: FollowUpPayload }
+  | { id: string; type: "CREATE_THOUGHT_UNIT"; label: string; payload: ThoughtUnitPayload }
+  | { id: string; type: "CREATE_ACTIVITY_LOG"; label: string; payload: ActivityLogPayload }
   | { id: string; type: "CREATE_THOUGHT"; label: string; payload: ThoughtPayload }
   | { id: string; type: "CREATE_GROWTH_ITEM"; label: string; payload: GrowthItemPayload }
   | { id: string; type: "CREATE_LEARNING_ITEM"; label: string; payload: LearningItemPayload }
@@ -129,6 +133,54 @@ export interface FollowUpPayload {
   dueDate: string | null;
   reason?: string | null;
   createdFrom?: string | null;
+}
+
+export type ThoughtUnitType =
+  | "ACTIVITY"
+  | "TASK"
+  | "REMINDER"
+  | "PEOPLE"
+  | "LEARNING"
+  | "MOOD"
+  | "HABIT"
+  | "JOURNAL"
+  | "IDEA"
+  | "MEMORY"
+  | "DECISION"
+  | "RANDOM";
+
+export interface ThoughtUnitPayload {
+  rawText: string;
+  cleanedText: string;
+  type: ThoughtUnitType;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  sourceCaptureId?: string | null;
+  routedTo?: string | null;
+}
+
+export type ActivityCategory =
+  | "WORK"
+  | "TALAL_OS"
+  | "FITNESS"
+  | "DANCE"
+  | "FOOD"
+  | "REST"
+  | "SOCIAL"
+  | "LEARNING"
+  | "PROCRASTINATION"
+  | "RECOVERY"
+  | "ERRAND"
+  | "OTHER";
+
+export interface ActivityLogPayload {
+  activity: string;
+  category: ActivityCategory;
+  startedAt?: string | null;
+  endedAt?: string | null;
+  energyLevel?: "LOW" | "MEDIUM" | "HIGH" | null;
+  mood?: string | null;
+  notes?: string | null;
+  sourceCaptureId?: string | null;
 }
 
 export type ThoughtCategory =
@@ -374,6 +426,8 @@ export interface ExecutionResult {
   memoriesSaved: number;
   remindersCreated: number;
   followUpsCreated: number;
+  thoughtUnitsCreated: number;
+  activityLogsCreated: number;
   thoughtsSaved: number;
   growthItemsCreated: number;
   learningItemsCreated: number;

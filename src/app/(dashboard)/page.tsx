@@ -1,10 +1,12 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import {
+  Activity,
   ArrowRight,
   BookOpen,
   Brain,
   CheckCircle2,
+  Clock,
   HelpCircle,
   Inbox,
   MessageCircle,
@@ -175,6 +177,42 @@ export default async function DashboardPage() {
         <div className="space-y-5">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <Activity className="h-4 w-4" />
+                Day Pulse
+              </CardTitle>
+              <Button asChild size="sm">
+                <Link href="/pulse">Check In Now</Link>
+              </Button>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {plan.pendingPulse && (
+                <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+                  <p className="text-sm font-medium text-amber-900 dark:text-amber-100">{plan.pendingPulse.prompt}</p>
+                  <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                    Scheduled {formatTime(plan.pendingPulse.scheduledFor)}
+                  </p>
+                </div>
+              )}
+              <div className="rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+                <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">Current activity</p>
+                <p className="mt-1 text-sm font-medium text-neutral-900 dark:text-neutral-50">
+                  {plan.currentActivity?.activity ?? "No activity logged yet."}
+                </p>
+                {plan.currentActivity && (
+                  <p className="mt-1 text-xs text-neutral-500">
+                    {formatCategory(plan.currentActivity.category)} · {formatTime(plan.currentActivity.createdAt)}
+                  </p>
+                )}
+              </div>
+              <p className="text-xs text-neutral-500">
+                {plan.todayActivityCount} activit{plan.todayActivityCount === 1 ? "y" : "ies"} logged today.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
               <CardTitle className="text-sm font-medium text-neutral-500">
                 Remaining Habits
               </CardTitle>
@@ -277,6 +315,30 @@ export default async function DashboardPage() {
               )}
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <Clock className="h-4 w-4" />
+                Today&apos;s Timeline
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {plan.todayActivityLogs.length === 0 ? (
+                <EmptyLine text="No activity timeline yet." />
+              ) : (
+                plan.todayActivityLogs.map((activity) => (
+                  <div key={activity.id} className="flex items-start gap-3 rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
+                    <span className="mt-0.5 text-xs text-neutral-400">{formatTime(activity.createdAt)}</span>
+                    <div>
+                      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{activity.activity}</p>
+                      <p className="text-xs text-neutral-500">{formatCategory(activity.category)}</p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
         </div>
       </div>
     </div>
@@ -330,6 +392,10 @@ function EmptyLine({ text }: { text: string }) {
 
 function formatCategory(category: string): string {
   return category.toLowerCase().replace(/_/g, " ");
+}
+
+function formatTime(date: Date): string {
+  return new Intl.DateTimeFormat("en-US", { hour: "numeric", minute: "2-digit" }).format(date);
 }
 
 function getHourInTimeZone(timeZone: string): number {

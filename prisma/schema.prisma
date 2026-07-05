@@ -26,8 +26,11 @@ model User {
   growthItems       GrowthItem[]
   followUpQuestions FollowUpQuestion[]
   thoughts          Thought[]
+  thoughtUnits      ThoughtUnit[]
   learningItems     LearningItem[]
   reviewSessions    ReviewSession[]
+  activityLogs      ActivityLog[]
+  dayPulses         DayPulse[]
   people            Person[]
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
@@ -251,6 +254,24 @@ model Thought {
   @@index([createdAt])
 }
 
+model ThoughtUnit {
+  id              String          @id @default(cuid())
+  rawText         String
+  cleanedText     String
+  type            ThoughtUnitType
+  confidence      Level           @default(MEDIUM)
+  sourceCaptureId String?
+  routedTo        String?
+  createdAt       DateTime        @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([type])
+  @@index([createdAt])
+}
+
 model LearningItem {
   id              String                @id @default(cuid())
   title           String
@@ -306,6 +327,43 @@ model ReviewAnswer {
 
   @@index([reviewSessionId])
   @@index([learningItemId])
+}
+
+model ActivityLog {
+  id              String           @id @default(cuid())
+  activity        String
+  category        ActivityCategory
+  startedAt       DateTime?
+  endedAt         DateTime?
+  energyLevel     Level?
+  mood            String?
+  notes           String?
+  sourceCaptureId String?
+  createdAt       DateTime         @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([createdAt])
+}
+
+model DayPulse {
+  id           String         @id @default(cuid())
+  scheduledFor DateTime
+  sentAt       DateTime?
+  answeredAt   DateTime?
+  status       DayPulseStatus @default(PENDING)
+  prompt       String
+  createdAt    DateTime       @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([scheduledFor])
+  @@index([status])
 }
 
 model Habit {
@@ -616,6 +674,42 @@ enum ReviewSelfRating {
   HARD
   GOOD
   EASY
+}
+
+enum ThoughtUnitType {
+  ACTIVITY
+  TASK
+  REMINDER
+  PEOPLE
+  LEARNING
+  MOOD
+  HABIT
+  JOURNAL
+  IDEA
+  MEMORY
+  DECISION
+  RANDOM
+}
+
+enum ActivityCategory {
+  WORK
+  TALAL_OS
+  FITNESS
+  DANCE
+  FOOD
+  REST
+  SOCIAL
+  LEARNING
+  PROCRASTINATION
+  RECOVERY
+  ERRAND
+  OTHER
+}
+
+enum DayPulseStatus {
+  PENDING
+  ANSWERED
+  SKIPPED
 }
 
 enum MemoryType {

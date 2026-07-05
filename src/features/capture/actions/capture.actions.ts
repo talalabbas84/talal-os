@@ -7,6 +7,7 @@ import { executeActions } from "@/lib/intelligence/execution-engine";
 import { planFromCapture } from "@/lib/intelligence/action-planner";
 import { planGrowthFromCapture } from "@/lib/intelligence/growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "@/lib/intelligence/thought-learning-engine";
+import { planFromThoughtUnits, splitThoughts } from "@/lib/intelligence/thought-splitter";
 import type { ActionResult } from "@/types";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
 
@@ -80,6 +81,7 @@ export async function saveCreateCapture(
   try {
     const userId = await requireUserId();
     const growthActions = await planGrowthFromCapture(userId, input.capture.articulation.articulated, input.capture.capture);
+    const thoughtUnitActions = planFromThoughtUnits(splitThoughts(input.capture.articulation.original));
     const thoughtLearningActions = planThoughtAndLearningFromCapture({
       rawText: input.capture.articulation.original,
       cleanedText: input.capture.articulation.articulated,
@@ -87,6 +89,7 @@ export async function saveCreateCapture(
       skipThought: isDirectCommand(input.capture.articulation.articulated, input.capture.capture),
     });
     const actions = [
+      ...thoughtUnitActions,
       ...planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits),
       ...thoughtLearningActions,
       ...growthActions,
@@ -111,6 +114,7 @@ function revalidateAll() {
   revalidatePath("/people");
   revalidatePath("/thoughts");
   revalidatePath("/learn");
+  revalidatePath("/pulse");
   revalidatePath("/capture");
   revalidatePath("/");
 }

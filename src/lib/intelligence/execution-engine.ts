@@ -20,6 +20,8 @@ export async function executeActions(
     memoriesSaved: 0,
     remindersCreated: 0,
     followUpsCreated: 0,
+    thoughtUnitsCreated: 0,
+    activityLogsCreated: 0,
     thoughtsSaved: 0,
     growthItemsCreated: 0,
     learningItemsCreated: 0,
@@ -139,6 +141,42 @@ export async function executeActions(
           },
         });
         result.followUpsCreated++;
+        break;
+      }
+
+      case "CREATE_THOUGHT_UNIT": {
+        const { payload } = action;
+        await prisma.thoughtUnit.create({
+          data: {
+            userId,
+            rawText: payload.rawText,
+            cleanedText: payload.cleanedText,
+            type: payload.type,
+            confidence: payload.confidence,
+            sourceCaptureId: payload.sourceCaptureId ?? null,
+            routedTo: payload.routedTo ?? null,
+          },
+        });
+        result.thoughtUnitsCreated++;
+        break;
+      }
+
+      case "CREATE_ACTIVITY_LOG": {
+        const { payload } = action;
+        await prisma.activityLog.create({
+          data: {
+            userId,
+            activity: payload.activity,
+            category: payload.category,
+            startedAt: parseDate(payload.startedAt),
+            endedAt: parseDate(payload.endedAt),
+            energyLevel: payload.energyLevel ?? null,
+            mood: payload.mood ?? null,
+            notes: payload.notes ?? null,
+            sourceCaptureId: payload.sourceCaptureId ?? null,
+          },
+        });
+        result.activityLogsCreated++;
         break;
       }
 

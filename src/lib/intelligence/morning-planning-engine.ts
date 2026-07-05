@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { TaskWithProject } from "@/types";
-import type { FollowUpType, GrowthCategory, LearningCategory, Level } from "@prisma/client";
+import type { ActivityCategory, DayPulseStatus, FollowUpType, GrowthCategory, LearningCategory, Level } from "@prisma/client";
 
 export interface DailyPlan {
   date: Date;
@@ -21,6 +21,10 @@ export interface DailyPlan {
   followUps: FollowUpSummary[];
   todaysQuestions: TodayQuestion[];
   dueLearningItems: DueLearningItem[];
+  pendingPulse: PendingPulse | null;
+  currentActivity: ActivityLogSummary | null;
+  todayActivityCount: number;
+  todayActivityLogs: ActivityLogSummary[];
   inboxCount: number;
   recentReflection: {
     feeling: string | null;
@@ -54,6 +58,22 @@ export interface DueLearningItem {
   nextReviewAt: Date | null;
 }
 
+export interface PendingPulse {
+  id: string;
+  prompt: string;
+  scheduledFor: Date;
+  status: DayPulseStatus;
+}
+
+export interface ActivityLogSummary {
+  id: string;
+  activity: string;
+  category: ActivityCategory;
+  mood: string | null;
+  energyLevel: Level | null;
+  createdAt: Date;
+}
+
 interface MorningPlanningOptions {
   persist: boolean;
 }
@@ -65,6 +85,7 @@ export async function buildMorningPlan(
   const today = startOfToday();
   const tomorrow = addDays(today, 1);
   const nextWeek = addDays(today, 7);
+  const now = new Date();
 
   const [
     existingPlan,
@@ -77,6 +98,9 @@ export async function buildMorningPlan(
     openFollowUps,
     todaysQuestions,
     dueLearningItems,
+    pendingPulse,
+    todayActivityLogs,
+    todayActivityCount,
     personInteractions,
     todayLog,
     recentLog,
@@ -138,6 +162,22 @@ export async function buildMorningPlan(
       },
       orderBy: [{ nextReviewAt: { sort: "asc", nulls: "first" } }, { createdAt: "asc" }],
       take: 5,
+    }),
+    prisma.dayPulse.findFirst({
+      where: {
+        userId,
+        status: "PENDING",
+        scheduledFor: { lte: now },
+      },
+      orderBy: { scheduledFor: "asc" },
+    }),
+    prisma.activityLog.findMany({
+      where: { userId, createdAt: { gte: today, lt: tomorrow } },
+      orderBy: { createdAt: "desc" },
+      take: 8,
+    }),
+    prisma.activityLog.count({
+      where: { userId, createdAt: { gte: today, lt: tomorrow } },
     }),
     prisma.personInteraction.findMany({
       where: { userId, followUpNeeded: true },
@@ -255,6 +295,33 @@ export async function buildMorningPlan(
       title: item.title,
       category: item.category,
       nextReviewAt: item.nextReviewAt,
+    })),
+    pendingPulse: pendingPulse
+      ? {
+          id: pendingPulse.id,
+          prompt: pendingPulse.prompt,
+          scheduledFor: pendingPulse.scheduledFor,
+          status: pendingPulse.status,
+        }
+      : null,
+    currentActivity: todayActivityLogs[0]
+      ? {
+          id: todayActivityLogs[0].id,
+          activity: todayActivityLogs[0].activity,
+          category: todayActivityLogs[0].category,
+          mood: todayActivityLogs[0].mood,
+          energyLevel: todayActivityLogs[0].energyLevel,
+          createdAt: todayActivityLogs[0].createdAt,
+        }
+      : null,
+    todayActivityCount,
+    todayActivityLogs: todayActivityLogs.map((activity) => ({
+      id: activity.id,
+      activity: activity.activity,
+      category: activity.category,
+      mood: activity.mood,
+      energyLevel: activity.energyLevel,
+      createdAt: activity.createdAt,
     })),
     inboxCount,
     recentReflection: recentLog

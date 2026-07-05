@@ -15,6 +15,7 @@ import {
   Users,
   FlaskConical,
   Library,
+  Activity,
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { cn } from "@/utils/cn";
@@ -24,6 +25,7 @@ const navItems = [
   { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/thoughts", label: "Thoughts", icon: Library },
   { href: "/learn", label: "Learn", icon: BookOpen },
+  { href: "/pulse", label: "Pulse", icon: Activity },
   { href: "/memory", label: "Memory", icon: Brain },
   { href: "/people", label: "People", icon: Users },
   { href: "/inbox", label: "Inbox", icon: Inbox },

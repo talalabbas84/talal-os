@@ -23,6 +23,7 @@ import {
 } from "./action-planner";
 import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-learning-engine";
+import { planFromThoughtUnits, splitThoughts } from "./thought-splitter";
 import type { PipelineResult, IntentResult } from "./types";
 
 // processCapture: main entry — classifies intent then runs the right workflow.
@@ -31,6 +32,8 @@ export async function processCapture(
   text: string,
 ): Promise<PipelineResult> {
   const provider = getAIProvider();
+  const thoughtUnits = splitThoughts(text);
+  const thoughtUnitActions = planFromThoughtUnits(thoughtUnits);
   const articulation = await articulateCapture(text);
   const articulatedText = articulation.articulated;
 
@@ -44,7 +47,7 @@ export async function processCapture(
       intent: "UPDATE",
       intentResult: { intent: "UPDATE", confidence: "high", reason: "Smart capture shortcut detected." },
       commands: [],
-      actions: [...shortcutActions, ...growthActions],
+      actions: [...thoughtUnitActions, ...shortcutActions, ...growthActions],
     };
   }
 
@@ -72,7 +75,7 @@ export async function processCapture(
         intent: "UPDATE",
         intentResult,
         commands,
-        actions: [...planFromCommands(commands), ...thoughtLearningActions, ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromCommands(commands), ...thoughtLearningActions, ...growthActions],
       };
     }
 
@@ -84,7 +87,7 @@ export async function processCapture(
         intent: "DECISION",
         intentResult,
         recommendation,
-        actions: [...planFromRecommendation(recommendation), ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromRecommendation(recommendation), ...growthActions],
       };
     }
 
@@ -107,7 +110,7 @@ export async function processCapture(
         intent: intentResult.intent as "REFLECTION" | "JOURNAL",
         intentResult,
         reflectionData: data,
-        actions: [...planFromReflection(data), ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromReflection(data), ...growthActions],
       };
     }
 
@@ -120,8 +123,10 @@ export async function processCapture(
         intentResult,
         answer,
         actions: growthActions.length > 0
-          ? growthActions
-          : [{ id: "noop-1", type: "NO_ACTION", label: "No changes needed", payload: {} }],
+          ? [...thoughtUnitActions, ...growthActions]
+          : thoughtUnitActions.length > 0
+            ? thoughtUnitActions
+            : [{ id: "noop-1", type: "NO_ACTION", label: "No changes needed", payload: {} }],
       };
     }
 
@@ -133,7 +138,7 @@ export async function processCapture(
         intent: "PLAN",
         intentResult,
         plan,
-        actions: [...planFromDailyPlan(plan), ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromDailyPlan(plan), ...growthActions],
       };
     }
 
@@ -152,7 +157,7 @@ export async function processCapture(
         intent: "MEMORY",
         intentResult,
         candidates,
-        actions: [...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions],
       };
     }
 
@@ -190,7 +195,7 @@ export async function processCapture(
         intentResult,
         capture,
         // Pre-computed actions from default inclusion — capture-view will recompute on save
-        actions: [...planFromCapture(capture, defaultInclusion, {}), ...thoughtLearningActions, ...growthActions],
+        actions: [...thoughtUnitActions, ...planFromCapture(capture, defaultInclusion, {}), ...thoughtLearningActions, ...growthActions],
       };
     }
   }
