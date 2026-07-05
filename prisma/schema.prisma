@@ -35,6 +35,13 @@ model User {
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
   personInsights    PersonInsight[]
+  personalProfile   PersonalProfile?
+  personalInsights  PersonalInsight[]
+  personalPatterns  PersonalPattern[]
+  reflectionQuestions ReflectionQuestion[]
+  personalGrowthAreas PersonalGrowthArea[]
+  timelineEvents    TimelineEvent[]
+  dailyReflections  DailyReflection[]
 }
 
 model UserState {
@@ -503,6 +510,144 @@ model PersonMemory {
   @@index([type])
 }
 
+model PersonalProfile {
+  id                 String   @id @default(cuid())
+  mission            String?
+  currentIdentity    String?
+  futureIdentity     String?
+  coreValues         Json?
+  strengths          Json?
+  growthAreas        Json?
+  learningStyle      Json?
+  communicationStyle Json?
+  decisionStyle      Json?
+  motivationProfile  Json?
+  updatedAt          DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model PersonalInsight {
+  id          String                  @id @default(cuid())
+  category    PersonalInsightCategory
+  title       String
+  description String
+  confidence  Level                   @default(MEDIUM)
+  evidence    Json
+  importance  MemoryImportance        @default(MEDIUM)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([importance])
+  @@index([createdAt])
+}
+
+model PersonalPattern {
+  id          String                  @id @default(cuid())
+  category    PersonalInsightCategory
+  title       String
+  description String
+  evidence    Json
+  confidence  Level                   @default(MEDIUM)
+  lastSeen    DateTime
+  occurrences Int                     @default(1)
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, title])
+  @@index([userId])
+  @@index([category])
+  @@index([lastSeen])
+}
+
+model ReflectionQuestion {
+  id             String                   @id @default(cuid())
+  question       String
+  reason         String?
+  priority       Level                    @default(MEDIUM)
+  relatedInsight String?
+  relatedCapture String?
+  status         ReflectionQuestionStatus @default(OPEN)
+  createdAt      DateTime                 @default(now())
+  answeredAt     DateTime?
+  updatedAt      DateTime                 @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([priority])
+  @@index([createdAt])
+}
+
+model PersonalGrowthArea {
+  id                 String         @id @default(cuid())
+  dimension          GrowthDimension
+  currentConfidence  String?
+  momentum           GrowthMomentum @default(STABLE)
+  recentWins         Json?
+  currentChallenge   String?
+  nextRecommendation String?
+  updatedAt          DateTime       @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, dimension])
+  @@index([userId])
+  @@index([dimension])
+  @@index([momentum])
+}
+
+model TimelineEvent {
+  id          String                  @id @default(cuid())
+  title       String
+  description String?
+  category    PersonalInsightCategory
+  occurredAt  DateTime?
+  importance  MemoryImportance        @default(MEDIUM)
+  evidence    Json?
+  createdAt   DateTime                @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([importance])
+  @@index([occurredAt])
+  @@index([createdAt])
+}
+
+model DailyReflection {
+  id                     String   @id @default(cuid())
+  date                   DateTime @db.Date
+  whatHappened           String?
+  learned                String?
+  improved               String?
+  struggled              String?
+  tomorrowRecommendation String?
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
 enum PersonMemoryType {
   BIRTHDAY
   PREFERENCE
@@ -710,6 +855,48 @@ enum DayPulseStatus {
   PENDING
   ANSWERED
   SKIPPED
+}
+
+enum PersonalInsightCategory {
+  IDENTITY
+  EMOTIONAL
+  THINKING
+  LEARNING
+  COMMUNICATION
+  HEALTH
+  RELATIONSHIP
+  PRODUCTIVITY
+  DECISION
+  FINANCE
+  GROWTH
+  LIFE_PATTERN
+}
+
+enum ReflectionQuestionStatus {
+  OPEN
+  ANSWERED
+  DISMISSED
+}
+
+enum GrowthDimension {
+  COMMUNICATION
+  EMOTIONAL_MATURITY
+  CONFIDENCE
+  HEALTH
+  DANCE
+  CAREER
+  FINANCIAL_LITERACY
+  LEARNING
+  RELATIONSHIPS
+  LEADERSHIP
+  DECISION_MAKING
+}
+
+enum GrowthMomentum {
+  GROWING
+  STABLE
+  NEEDS_ATTENTION
+  STRONG_MOMENTUM
 }
 
 enum MemoryType {

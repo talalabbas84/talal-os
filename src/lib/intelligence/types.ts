@@ -52,6 +52,13 @@ export const ACTION_TYPES = [
   "CREATE_FOLLOW_UP_QUESTION",
   "CREATE_PROJECT",
   "CREATE_PERSON_UPDATE",
+  "UPSERT_PERSONAL_PROFILE",
+  "CREATE_PERSONAL_INSIGHT",
+  "UPSERT_PERSONAL_PATTERN",
+  "CREATE_REFLECTION_QUESTION",
+  "UPSERT_PERSONAL_GROWTH_AREA",
+  "CREATE_TIMELINE_EVENT",
+  "UPSERT_DAILY_REFLECTION",
   "ANSWER_FOLLOW_UP_QUESTION",
   "COMPLETE_TASK",
   "COMPLETE_TOP_TASK",
@@ -81,6 +88,13 @@ export type PlannedAction =
   | { id: string; type: "CREATE_FOLLOW_UP_QUESTION"; label: string; payload: FollowUpQuestionPayload }
   | { id: string; type: "CREATE_PROJECT"; label: string; payload: ProjectPayload }
   | { id: string; type: "CREATE_PERSON_UPDATE"; label: string; payload: PersonUpdatePayload }
+  | { id: string; type: "UPSERT_PERSONAL_PROFILE"; label: string; payload: PersonalProfilePayload }
+  | { id: string; type: "CREATE_PERSONAL_INSIGHT"; label: string; payload: PersonalInsightPayload }
+  | { id: string; type: "UPSERT_PERSONAL_PATTERN"; label: string; payload: PersonalPatternPayload }
+  | { id: string; type: "CREATE_REFLECTION_QUESTION"; label: string; payload: ReflectionQuestionPayload }
+  | { id: string; type: "UPSERT_PERSONAL_GROWTH_AREA"; label: string; payload: PersonalGrowthAreaPayload }
+  | { id: string; type: "CREATE_TIMELINE_EVENT"; label: string; payload: TimelineEventPayload }
+  | { id: string; type: "UPSERT_DAILY_REFLECTION"; label: string; payload: DailyReflectionPayload }
   | { id: string; type: "ANSWER_FOLLOW_UP_QUESTION"; label: string; payload: AnswerFollowUpQuestionPayload }
   | { id: string; type: "COMPLETE_TASK"; label: string; payload: { taskTitle: string } }
   | { id: string; type: "COMPLETE_TOP_TASK"; label: string; payload: Record<string, never> }
@@ -327,6 +341,106 @@ export interface PersonUpdatePayload {
   insights: PersonInsightPayload[];
 }
 
+export type PersonalInsightCategory =
+  | "IDENTITY"
+  | "EMOTIONAL"
+  | "THINKING"
+  | "LEARNING"
+  | "COMMUNICATION"
+  | "HEALTH"
+  | "RELATIONSHIP"
+  | "PRODUCTIVITY"
+  | "DECISION"
+  | "FINANCE"
+  | "GROWTH"
+  | "LIFE_PATTERN";
+
+export type GrowthDimension =
+  | "COMMUNICATION"
+  | "EMOTIONAL_MATURITY"
+  | "CONFIDENCE"
+  | "HEALTH"
+  | "DANCE"
+  | "CAREER"
+  | "FINANCIAL_LITERACY"
+  | "LEARNING"
+  | "RELATIONSHIPS"
+  | "LEADERSHIP"
+  | "DECISION_MAKING";
+
+export type GrowthMomentum =
+  | "GROWING"
+  | "STABLE"
+  | "NEEDS_ATTENTION"
+  | "STRONG_MOMENTUM";
+
+export interface PersonalProfilePayload {
+  mission?: string | null;
+  currentIdentity?: string | null;
+  futureIdentity?: string | null;
+  coreValues?: unknown;
+  strengths?: unknown;
+  growthAreas?: unknown;
+  learningStyle?: unknown;
+  communicationStyle?: unknown;
+  decisionStyle?: unknown;
+  motivationProfile?: unknown;
+}
+
+export interface PersonalInsightPayload {
+  category: PersonalInsightCategory;
+  title: string;
+  description: string;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  evidence: unknown;
+  importance: "LOW" | "MEDIUM" | "HIGH" | "PERMANENT";
+}
+
+export interface PersonalPatternPayload {
+  category: PersonalInsightCategory;
+  title: string;
+  description: string;
+  evidence: unknown[];
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  lastSeen?: string | null;
+  occurrences?: number;
+}
+
+export interface ReflectionQuestionPayload {
+  question: string;
+  reason?: string | null;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  relatedInsight?: string | null;
+  relatedCapture?: string | null;
+}
+
+export interface PersonalGrowthAreaPayload {
+  dimension: GrowthDimension;
+  currentConfidence?: string | null;
+  momentum: GrowthMomentum;
+  recentWins?: unknown;
+  currentChallenge?: string | null;
+  nextRecommendation?: string | null;
+}
+
+export interface TimelineEventPayload {
+  title: string;
+  description?: string | null;
+  category: PersonalInsightCategory;
+  occurredAt?: string | null;
+  importance: "LOW" | "MEDIUM" | "HIGH" | "PERMANENT";
+  evidence?: unknown;
+}
+
+export interface DailyReflectionPayload {
+  date?: string | null;
+  whatHappened?: string | null;
+  learned?: string | null;
+  improved?: string | null;
+  struggled?: string | null;
+  tomorrowRecommendation?: string | null;
+}
+
 export interface UserStatePayload {
   currentMood?: string;
   energyLevel?: "LOW" | "MEDIUM" | "HIGH";
@@ -440,4 +554,11 @@ export interface ExecutionResult {
   commandsExecuted: number;
   peopleUpdated: number;
   insightsSaved: number;
+  personalInsightsCreated: number;
+  personalPatternsUpdated: number;
+  reflectionQuestionsCreated: number;
+  growthAreasUpdated: number;
+  timelineEventsCreated: number;
+  personalProfileUpdated: boolean;
+  dailyReflectionsSaved: number;
 }

@@ -20,6 +20,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GenerateTodayButton } from "@/features/dashboard/components/generate-today-button";
 import { DashboardTopTasks } from "@/features/dashboard/components/dashboard-top-tasks";
 import { auth } from "@/lib/auth";
+import { prisma } from "@/lib/prisma";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 
 export default async function DashboardPage() {
@@ -27,6 +28,7 @@ export default async function DashboardPage() {
   if (!session?.user?.id) redirect("/login");
 
   const plan = await buildDailyPlan(session.user.id);
+  const personalIntelligence = await getPersonalIntelligenceSummary(session.user.id);
   const firstName = session.user.name?.split(" ")[0] ?? "Talal";
   const showReflectionReminder = !plan.journalFilled && getHourInTimeZone("America/Toronto") >= 20;
   const nextAction = plan.topTasks[0]?.title ?? plan.habitsDue[0]?.name ?? "Capture what is on your mind.";
@@ -63,6 +65,8 @@ export default async function DashboardPage() {
       </section>
 
       {showReflectionReminder && <ReflectionReminder />}
+
+      <PersonalIntelligencePanel summary={personalIntelligence} todayFocus={plan.todayMission} />
 
       <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_0.75fr]">
         <div className="space-y-5">
@@ -341,6 +345,94 @@ export default async function DashboardPage() {
           </Card>
         </div>
       </div>
+    </div>
+  );
+}
+
+async function getPersonalIntelligenceSummary(userId: string) {
+  const weekStart = new Date();
+  weekStart.setDate(weekStart.getDate() - 7);
+
+  const [
+    reflectionQuestion,
+    recentPersonalInsight,
+    growthArea,
+    insightCount,
+    timelineCount,
+    reviewCount,
+  ] = await Promise.all([
+    prisma.reflectionQuestion.findFirst({
+      where: { userId, status: "OPEN" },
+      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.personalInsight.findFirst({
+      where: { userId },
+      orderBy: [{ importance: "desc" }, { createdAt: "desc" }],
+    }),
+    prisma.personalGrowthArea.findFirst({
+      where: { userId },
+      orderBy: [{ updatedAt: "desc" }],
+    }),
+    prisma.personalInsight.count({ where: { userId, createdAt: { gte: weekStart } } }),
+    prisma.timelineEvent.count({ where: { userId, createdAt: { gte: weekStart } } }),
+    prisma.learningItem.count({ where: { userId, nextReviewAt: { lte: new Date() } } }),
+  ]);
+
+  return {
+    reflectionQuestion,
+    recentPersonalInsight,
+    growthArea,
+    weeklyProgress: `${insightCount} insights · ${timelineCount} life events`,
+    upcomingReviews: `${reviewCount} due`,
+    currentChallenge: growthArea?.currentChallenge ?? "No current challenge captured yet.",
+    todayRecommendation: growthArea?.nextRecommendation ?? "Capture the next raw thought before trying to organize it.",
+  };
+}
+
+function PersonalIntelligencePanel({
+  summary,
+  todayFocus,
+}: {
+  summary: Awaited<ReturnType<typeof getPersonalIntelligenceSummary>>;
+  todayFocus: string;
+}) {
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+          <Brain className="h-4 w-4" />
+          Personal Intelligence
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <IntelligenceItem label="Today's Focus" value={todayFocus} />
+        <IntelligenceItem
+          label="Today's Reflection Question"
+          value={summary.reflectionQuestion?.question ?? "No reflection question pending."}
+        />
+        <IntelligenceItem
+          label="Current Growth Momentum"
+          value={summary.growthArea ? formatCategory(summary.growthArea.momentum) : "No momentum captured yet."}
+        />
+        <IntelligenceItem
+          label="Recent Personal Insight"
+          value={summary.recentPersonalInsight?.title ?? "No personal insight captured yet."}
+        />
+        <IntelligenceItem label="Current Challenge" value={summary.currentChallenge} />
+        <IntelligenceItem label="Today's Recommendation" value={summary.todayRecommendation} />
+        <IntelligenceItem label="Weekly Progress" value={summary.weeklyProgress} />
+        <IntelligenceItem label="Upcoming Reviews" value={summary.upcomingReviews} />
+        <IntelligenceItem label="Learning Review" value={summary.upcomingReviews} />
+      </CardContent>
+    </Card>
+  );
+}
+
+function IntelligenceItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+      <p className="text-xs font-medium uppercase tracking-wide text-neutral-400">{label}</p>
+      <p className="mt-1 line-clamp-3 text-sm leading-6 text-neutral-800 dark:text-neutral-200">{value}</p>
     </div>
   );
 }

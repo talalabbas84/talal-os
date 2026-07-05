@@ -8,6 +8,7 @@ import { planFromCapture } from "@/lib/intelligence/action-planner";
 import { planGrowthFromCapture } from "@/lib/intelligence/growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "@/lib/intelligence/thought-learning-engine";
 import { planFromThoughtUnits, splitThoughts } from "@/lib/intelligence/thought-splitter";
+import { planPersonalIntelligenceActions } from "@/lib/intelligence/personal-intelligence";
 import type { ActionResult } from "@/types";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
 
@@ -88,12 +89,20 @@ export async function saveCreateCapture(
       capture: input.capture.capture,
       skipThought: isDirectCommand(input.capture.articulation.articulated, input.capture.capture),
     });
-    const actions = [
+    const baseActions = [
       ...thoughtUnitActions,
       ...planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits),
       ...thoughtLearningActions,
       ...growthActions,
     ];
+    const personalIntelligenceActions = await planPersonalIntelligenceActions({
+      userId,
+      rawText: input.capture.articulation.original,
+      cleanedText: input.capture.articulation.articulated,
+      capture: input.capture.capture,
+      existingActions: baseActions,
+    });
+    const actions = [...baseActions, ...personalIntelligenceActions];
     if (!actions.length) return { success: false, error: "Nothing selected to save." };
 
     const result = await executeActions(userId, actions);

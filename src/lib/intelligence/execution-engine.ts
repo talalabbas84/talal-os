@@ -5,7 +5,7 @@
 import { prisma } from "@/lib/prisma";
 import { computePriorityScore } from "@/utils/priority";
 import type { PlannedAction, ExecutionResult } from "./types";
-import type { Task, Habit } from "@prisma/client";
+import type { Task, Habit, Prisma } from "@prisma/client";
 
 export async function executeActions(
   userId: string,
@@ -34,6 +34,13 @@ export async function executeActions(
     commandsExecuted: 0,
     peopleUpdated: 0,
     insightsSaved: 0,
+    personalInsightsCreated: 0,
+    personalPatternsUpdated: 0,
+    reflectionQuestionsCreated: 0,
+    growthAreasUpdated: 0,
+    timelineEventsCreated: 0,
+    personalProfileUpdated: false,
+    dailyReflectionsSaved: 0,
   };
 
   // Prefetch for fuzzy matching (only if needed)
@@ -334,6 +341,198 @@ export async function executeActions(
           result.questionsAnswered++;
           result.memoriesSaved++;
         }
+        break;
+      }
+
+      case "UPSERT_PERSONAL_PROFILE": {
+        const { payload } = action;
+        await prisma.personalProfile.upsert({
+          where: { userId },
+          create: {
+            userId,
+            mission: payload.mission ?? null,
+            currentIdentity: payload.currentIdentity ?? null,
+            futureIdentity: payload.futureIdentity ?? null,
+            coreValues: nullableJson(payload.coreValues),
+            strengths: nullableJson(payload.strengths),
+            growthAreas: nullableJson(payload.growthAreas),
+            learningStyle: nullableJson(payload.learningStyle),
+            communicationStyle: nullableJson(payload.communicationStyle),
+            decisionStyle: nullableJson(payload.decisionStyle),
+            motivationProfile: nullableJson(payload.motivationProfile),
+          },
+          update: {
+            ...(payload.mission !== undefined && { mission: payload.mission }),
+            ...(payload.currentIdentity !== undefined && { currentIdentity: payload.currentIdentity }),
+            ...(payload.futureIdentity !== undefined && { futureIdentity: payload.futureIdentity }),
+            ...(payload.coreValues !== undefined && { coreValues: nullableJson(payload.coreValues) }),
+            ...(payload.strengths !== undefined && { strengths: nullableJson(payload.strengths) }),
+            ...(payload.growthAreas !== undefined && { growthAreas: nullableJson(payload.growthAreas) }),
+            ...(payload.learningStyle !== undefined && { learningStyle: nullableJson(payload.learningStyle) }),
+            ...(payload.communicationStyle !== undefined && { communicationStyle: nullableJson(payload.communicationStyle) }),
+            ...(payload.decisionStyle !== undefined && { decisionStyle: nullableJson(payload.decisionStyle) }),
+            ...(payload.motivationProfile !== undefined && { motivationProfile: nullableJson(payload.motivationProfile) }),
+          },
+        });
+        result.personalProfileUpdated = true;
+        break;
+      }
+
+      case "CREATE_PERSONAL_INSIGHT": {
+        const { payload } = action;
+        const existing = await prisma.personalInsight.findFirst({
+          where: {
+            userId,
+            category: payload.category,
+            title: { equals: payload.title, mode: "insensitive" },
+          },
+        });
+
+        if (!existing) {
+          await prisma.personalInsight.create({
+            data: {
+              userId,
+              category: payload.category,
+              title: payload.title,
+              description: payload.description,
+              confidence: payload.confidence,
+              evidence: toJson(payload.evidence),
+              importance: payload.importance,
+            },
+          });
+          result.personalInsightsCreated++;
+        }
+        break;
+      }
+
+      case "UPSERT_PERSONAL_PATTERN": {
+        const { payload } = action;
+        const existing = await prisma.personalPattern.findUnique({
+          where: { userId_title: { userId, title: payload.title } },
+        });
+        const nextEvidence = Array.isArray(payload.evidence) ? payload.evidence : [payload.evidence];
+
+        if (existing) {
+          const currentEvidence = Array.isArray(existing.evidence) ? existing.evidence : [];
+          await prisma.personalPattern.update({
+            where: { id: existing.id },
+            data: {
+              description: payload.description,
+              evidence: toJson([...currentEvidence, ...nextEvidence].slice(-12)),
+              confidence: payload.confidence,
+              lastSeen: parseDate(payload.lastSeen) ?? new Date(),
+              occurrences: { increment: 1 },
+            },
+          });
+        } else {
+          await prisma.personalPattern.create({
+            data: {
+              userId,
+              category: payload.category,
+              title: payload.title,
+              description: payload.description,
+              evidence: toJson(nextEvidence),
+              confidence: payload.confidence,
+              lastSeen: parseDate(payload.lastSeen) ?? new Date(),
+              occurrences: payload.occurrences ?? 2,
+            },
+          });
+        }
+        result.personalPatternsUpdated++;
+        break;
+      }
+
+      case "CREATE_REFLECTION_QUESTION": {
+        const { payload } = action;
+        const existing = await prisma.reflectionQuestion.findFirst({
+          where: {
+            userId,
+            status: "OPEN",
+            question: { equals: payload.question, mode: "insensitive" },
+          },
+        });
+
+        if (!existing) {
+          await prisma.reflectionQuestion.create({
+            data: {
+              userId,
+              question: payload.question,
+              reason: payload.reason ?? null,
+              priority: payload.priority,
+              relatedInsight: payload.relatedInsight ?? null,
+              relatedCapture: payload.relatedCapture ?? null,
+            },
+          });
+          result.reflectionQuestionsCreated++;
+        }
+        break;
+      }
+
+      case "UPSERT_PERSONAL_GROWTH_AREA": {
+        const { payload } = action;
+        await prisma.personalGrowthArea.upsert({
+          where: { userId_dimension: { userId, dimension: payload.dimension } },
+          create: {
+            userId,
+            dimension: payload.dimension,
+            currentConfidence: payload.currentConfidence ?? null,
+            momentum: payload.momentum,
+            recentWins: nullableJson(payload.recentWins),
+            currentChallenge: payload.currentChallenge ?? null,
+            nextRecommendation: payload.nextRecommendation ?? null,
+          },
+          update: {
+            currentConfidence: payload.currentConfidence ?? undefined,
+            momentum: payload.momentum,
+            ...(payload.recentWins !== undefined && { recentWins: nullableJson(payload.recentWins) }),
+            currentChallenge: payload.currentChallenge ?? undefined,
+            nextRecommendation: payload.nextRecommendation ?? undefined,
+          },
+        });
+        result.growthAreasUpdated++;
+        break;
+      }
+
+      case "CREATE_TIMELINE_EVENT": {
+        const { payload } = action;
+        await prisma.timelineEvent.create({
+          data: {
+            userId,
+            title: payload.title,
+            description: payload.description ?? null,
+            category: payload.category,
+            occurredAt: parseDate(payload.occurredAt),
+            importance: payload.importance,
+            evidence: nullableJson(payload.evidence),
+          },
+        });
+        result.timelineEventsCreated++;
+        break;
+      }
+
+      case "UPSERT_DAILY_REFLECTION": {
+        const { payload } = action;
+        const reflectionDate = parseDate(payload.date) ?? today;
+        await prisma.dailyReflection.upsert({
+          where: { userId_date: { userId, date: reflectionDate } },
+          create: {
+            userId,
+            date: reflectionDate,
+            whatHappened: payload.whatHappened ?? null,
+            learned: payload.learned ?? null,
+            improved: payload.improved ?? null,
+            struggled: payload.struggled ?? null,
+            tomorrowRecommendation: payload.tomorrowRecommendation ?? null,
+          },
+          update: {
+            ...(payload.whatHappened !== undefined && { whatHappened: payload.whatHappened }),
+            ...(payload.learned !== undefined && { learned: payload.learned }),
+            ...(payload.improved !== undefined && { improved: payload.improved }),
+            ...(payload.struggled !== undefined && { struggled: payload.struggled }),
+            ...(payload.tomorrowRecommendation !== undefined && { tomorrowRecommendation: payload.tomorrowRecommendation }),
+          },
+        });
+        result.dailyReflectionsSaved++;
         break;
       }
 
@@ -668,4 +867,13 @@ function parseDate(value: string | null | undefined): Date | null {
   if (!value) return null;
   const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00.000Z`);
   return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function nullableJson(value: unknown): Prisma.InputJsonValue | undefined {
+  if (value === undefined || value === null) return undefined;
+  return toJson(value);
+}
+
+function toJson(value: unknown): Prisma.InputJsonValue {
+  return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
 }
