@@ -522,17 +522,23 @@ const EXCLUDED_NAMES = new Set([
   "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "January", "February",
   "March", "April", "May", "June", "July", "August", "September", "October",
   "November", "December", "God", "AI",
+  // Common sentence starters that aren't names
+  "It", "He", "She", "We", "They", "There", "Here", "What", "When", "Where",
+  "Why", "How", "Its", "Our", "Their", "Then", "Now", "Still", "Just",
+  "Plan", "Team", "Work", "Project", "Meeting", "Call", "Task",
 ]);
 
 function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutput[] {
   const updates = new Map<string, PersonUpdateOutput>();
 
-  // Pattern: "I met [Name]" / "I talked to [Name]" / "spoke with [Name]"
+  // Pattern: "I met [Name]" / "I talked to [Name]" / "spoke with [Name]" / "Lara was..."
   const meetPatterns = [
     /I met ([A-Z][a-z]+) today(?: at (.+?))?[.,]/gi,
     /I met ([A-Z][a-z]+)(?: at (.+?))?[.,]/gi,
     /I (?:talked|spoke|chatted) (?:to|with) ([A-Z][a-z]+)/gi,
     /([A-Z][a-z]+) (?:said|told me|mentioned|asked me|texted me|called me)/gi,
+    // Behavioral observations: "Lara was very direct" / "Lara seemed nervous"
+    /([A-Z][a-z]+) (?:was|is|has been|seemed|appeared|kept|stayed|came across as|behaved|acted)\b/gi,
   ];
 
   const mentionedNames = new Set<string>();
@@ -545,6 +551,10 @@ function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutpu
 
       if (!updates.has(name)) {
         const isFirstMeet = /I met/.test(match[0]);
+        const isBehavioral = /(?:was|is|seemed|appeared|kept|stayed|came across as|behaved|acted)\b/.test(match[0]);
+        const summaryText = isBehavioral
+          ? text.split(/[.!?]/)[0]?.trim() ?? `Observed interaction with ${name}`
+          : `Interaction with ${name}.`;
         updates.set(name, {
           personName: name,
           personData: {
@@ -561,7 +571,7 @@ function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutpu
           interaction: {
             date: todayISO,
             location: match[2]?.trim() ?? null,
-            summary: `Interaction with ${name}.`,
+            summary: summaryText,
             topics: [],
             context: null,
             sentiment: null,
@@ -569,8 +579,8 @@ function extractPeopleUpdates(text: string, todayISO: string): PersonUpdateOutpu
             followUpDate: null,
           },
           followUpTask: null,
-          confidence: "high",
-          reason: `Detected interaction with ${name}.`,
+          confidence: isBehavioral ? "medium" : "high",
+          reason: isBehavioral ? `Behavioral observation about ${name}.` : `Detected interaction with ${name}.`,
           insights: [],
         });
       }
@@ -840,6 +850,13 @@ function classifyIntentMock(text: string): IntentResultOutput {
   // Default: if text looks action-oriented → CREATE
   const hasActionWord = /\b(?:need to|have to|must|should|want to|buy|call|email|finish|fix|send|schedule|write|book)\b/i.test(text);
   if (hasActionWord) return { intent: "CREATE", confidence: "high", reason: "Action-oriented text with task keywords" };
+
+  // Detect person observations: "Lara was very direct" / "She seemed nervous"
+  const personObsMatch = text.match(/\b([A-Z][a-z]{1,20})\s+(?:was|is|seemed|appeared|kept|came across)\b/);
+  if (personObsMatch?.[1] && !EXCLUDED_NAMES.has(personObsMatch[1])) {
+    return { intent: "CREATE", confidence: "medium", reason: `Person observation — extracting insights about ${personObsMatch[1]}` };
+  }
+
   return { intent: "CREATE", confidence: "medium", reason: "Defaulting to CREATE — no specific intent pattern matched" };
 }
 
