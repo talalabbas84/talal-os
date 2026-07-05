@@ -1,5 +1,16 @@
 import type { AIProvider } from "./types";
-import type { CaptureResult, TaskOutput, IdeaOutput, HabitOutput, MemoryCandidateOutput, CommandOutput } from "./schema";
+import type {
+  CaptureResult,
+  TaskOutput,
+  IdeaOutput,
+  HabitOutput,
+  MemoryCandidateOutput,
+  CommandOutput,
+  IntentResultOutput,
+  RecommendationOutput,
+  ReflectionResultOutput,
+} from "./schema";
+import type { Intent } from "@/lib/intelligence/types";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -500,6 +511,123 @@ function extractCommands(text: string): CommandOutput[] {
   return commands;
 }
 
+// ── Intent classification ─────────────────────────────────────────────────────
+
+const INTENT_PATTERNS: Array<{ regex: RegExp; intent: Intent; reason: string }> = [
+  { regex: /\b(?:what should i|what do i|help me (?:decide|prioritize)|i'?m overwhelmed|feeling stuck|don'?t know what to)\b/i, intent: "DECISION", reason: "Asking for guidance or feeling overwhelmed" },
+  { regex: /\b(?:i'?m feeling|feeling (?:anxious|sad|down|low|frustrated|angry|nervous|worried|depressed|stressed))\b/i, intent: "REFLECTION", reason: "Emotional processing" },
+  { regex: /\b(?:plan (?:my|the|for|this) (?:day|week|month)|what'?s my focus|weekly plan|daily plan)\b/i, intent: "PLAN", reason: "Requesting a plan" },
+  { regex: /\b(?:what is|how (?:do i|does|can i)|can you (?:explain|tell me)|tell me about|what are the)\b/i, intent: "QUESTION", reason: "Asking for information" },
+  { regex: /\b(?:i(?:'ve)? (?:finished|completed|done)|done with|mark .+? (?:as )?done)\b/i, intent: "UPDATE", reason: "Reporting task completion" },
+  { regex: /\b(?:move|reschedule|postpone|delay|push) .+? to\b/i, intent: "UPDATE", reason: "Rescheduling" },
+  { regex: /\b(?:i realized|i noticed (?:that )?i|i always|i tend to|the thing about me|i am someone who|i'?ve learned|my rule is|my principle)\b/i, intent: "MEMORY", reason: "Identity or pattern insight" },
+  { regex: /\b(?:today i (?:did|finished|worked|accomplished)|here'?s what i did|what i did today|i accomplished)\b/i, intent: "JOURNAL", reason: "Journaling about today" },
+];
+
+function classifyIntentMock(text: string): IntentResultOutput {
+  for (const { regex, intent, reason } of INTENT_PATTERNS) {
+    if (regex.test(text)) {
+      return { intent, confidence: "high", reason };
+    }
+  }
+  // Default: if text looks action-oriented → CREATE
+  const hasActionWord = /\b(?:need to|have to|must|should|want to|buy|call|email|finish|fix|send|schedule|write|book)\b/i.test(text);
+  if (hasActionWord) return { intent: "CREATE", confidence: "high", reason: "Action-oriented text with task keywords" };
+  return { intent: "CREATE", confidence: "medium", reason: "Defaulting to CREATE — no specific intent pattern matched" };
+}
+
+// ── Recommendation ────────────────────────────────────────────────────────────
+
+function generateRecommendationMock(text: string, contextPrompt: string): RecommendationOutput {
+  const lower = text.toLowerCase();
+  const isOverwhelmed = /overwhelm|stressed|anxious|too much|can'?t handle/.test(lower);
+  const isSick = /sick|ill|tired|exhausted|unwell/.test(lower);
+
+  // Try to extract top task from context
+  const topTaskMatch = contextPrompt.match(/OPEN TASKS[^:]*:\s*[•\-]\s*([^\n\[]+)/);
+  const topTask = topTaskMatch?.[1]?.trim() ?? null;
+
+  const overdueMatch = contextPrompt.match(/OVERDUE \((\d+)\)/);
+  const overdueCount = overdueMatch ? parseInt(overdueMatch[1] ?? "0") : 0;
+
+  if (isSick) {
+    return {
+      summary: "You're not feeling well — switch to recovery mode. Do the bare minimum and rest.",
+      reasoning: "Pushing through when sick leads to worse output and longer recovery.",
+      topTask: null,
+      thingsToIgnore: ["non-critical meetings", "low priority tasks", "new projects"],
+      suggestedMode: "RECOVERY",
+    };
+  }
+
+  if (isOverwhelmed && overdueCount >= 2) {
+    return {
+      summary: `You have ${overdueCount} overdue tasks. Stop adding more. Pick one task and finish it.`,
+      reasoning: "Overwhelm is often caused by too many open loops, not too little time. Closing one thing creates momentum.",
+      topTask,
+      thingsToIgnore: ["new ideas", "low priority tasks", "inbox"],
+      suggestedMode: "FOCUS",
+    };
+  }
+
+  if (isOverwhelmed) {
+    return {
+      summary: topTask
+        ? `Focus on one thing: "${topTask}". Everything else can wait.`
+        : "Take a breath. Pick the single most important thing and do only that.",
+      reasoning: "When overwhelmed, the best move is radical narrowing — not more planning.",
+      topTask,
+      thingsToIgnore: ["low priority tasks", "optional habits"],
+      suggestedMode: "FOCUS",
+    };
+  }
+
+  return {
+    summary: topTask
+      ? `Your top priority is "${topTask}". Start there.`
+      : "Review your open tasks and pick the one with the most impact today.",
+    reasoning: "Based on your current tasks and context, this is the highest-leverage move.",
+    topTask,
+    thingsToIgnore: [],
+    suggestedMode: "NORMAL",
+  };
+}
+
+// ── Reflection ────────────────────────────────────────────────────────────────
+
+function generateReflectionMock(text: string): ReflectionResultOutput {
+  const healthStatus = extractHealthStatus(text);
+  const memoryCandidates = extractMemoryCandidates(text);
+
+  const lower = text.toLowerCase();
+  const feeling = healthStatus ? `Unwell — ${healthStatus.toLowerCase()}`
+    : /anxious|anxiety/.test(lower) ? "Anxious"
+    : /sad|down|low/.test(lower) ? "Low"
+    : /happy|great|good/.test(lower) ? "Good"
+    : /tired|exhausted/.test(lower) ? "Tired"
+    : /stressed/.test(lower) ? "Stressed"
+    : "";
+
+  // Extract accomplishments
+  const accomplishedMatch = text.match(/(?:i (?:did|finished|worked on|accomplished)|today i)\s+([^.!?]+)/i);
+  const accomplished = accomplishedMatch?.[1]?.trim() ?? "";
+
+  const reflection = healthStatus
+    ? `Dealing with ${healthStatus.toLowerCase()} takes real energy — acknowledging that is important. Rest is not failure; it is part of the work. ${memoryCandidates.length > 0 ? "There is a meaningful insight worth keeping here." : "Tomorrow will look different."}`
+    : `Processing what you are feeling is a productive act in itself. ${accomplished ? `You accomplished: ${accomplished}.` : ""} ${memoryCandidates.length > 0 ? "There is an insight here worth keeping." : "Check in with yourself before the day ends."}`
+
+  return {
+    reflection,
+    journal: {
+      feeling,
+      accomplished,
+      distractedBy: "",
+      improveTomorrow: "",
+    },
+    memoryCandidates,
+  };
+}
+
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export const mockProvider: AIProvider = {
@@ -551,5 +679,31 @@ export const mockProvider: AIProvider = {
         commands,
       },
     };
+  },
+
+  async classifyIntent(text: string, _contextSummary?: string): Promise<IntentResultOutput> {
+    await new Promise((r) => setTimeout(r, 100));
+    return classifyIntentMock(text);
+  },
+
+  async generateRecommendation(text: string, contextPrompt: string): Promise<RecommendationOutput> {
+    await new Promise((r) => setTimeout(r, 400));
+    return generateRecommendationMock(text, contextPrompt);
+  },
+
+  async generateReflection(text: string): Promise<ReflectionResultOutput> {
+    await new Promise((r) => setTimeout(r, 300));
+    return generateReflectionMock(text);
+  },
+
+  async answerQuestion(text: string, contextPrompt: string): Promise<string> {
+    await new Promise((r) => setTimeout(r, 200));
+    const lower = text.toLowerCase();
+    if (/what should i work on|what'?s my priority/.test(lower)) {
+      const topTaskMatch = contextPrompt.match(/OPEN TASKS[^:]*:\s*[•\-]\s*([^\n\[]+)/);
+      const topTask = topTaskMatch?.[1]?.trim();
+      return topTask ? `Your top priority right now is: ${topTask}.` : "Check your open tasks — the one due soonest or marked HIGH urgency is where to start.";
+    }
+    return "Based on your current context, I'd recommend reviewing your open tasks and focusing on the most urgent one first.";
   },
 };

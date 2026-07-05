@@ -4,12 +4,14 @@ import { getTodayTasks, getTopTasks } from "@/features/tasks/actions/task.action
 import { getProjects } from "@/features/projects/actions/project.actions";
 import { getInboxEntries } from "@/features/inbox/actions/inbox.actions";
 import { getTodayHabits } from "@/features/habits/actions/habit.actions";
+import { getUserState } from "@/features/dashboard/actions/user-state.actions";
 import { DashboardTaskList } from "@/features/dashboard/components/dashboard-task-list";
 import { DashboardProjectList } from "@/features/dashboard/components/dashboard-project-list";
 import { DashboardInboxList } from "@/features/dashboard/components/dashboard-inbox-list";
 import { DashboardHabitList } from "@/features/dashboard/components/dashboard-habit-list";
 import { DashboardTopTasks } from "@/features/dashboard/components/dashboard-top-tasks";
 import { DashboardDailySummary } from "@/features/dashboard/components/dashboard-daily-summary";
+import { DashboardUserState } from "@/features/dashboard/components/dashboard-user-state";
 import { QuickAdd } from "@/features/dashboard/components/quick-add";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 
@@ -17,7 +19,7 @@ export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [todayTasks, topTasks, activeProjects, recentInbox, todayHabits, dailyPlan] =
+  const [todayTasks, topTasks, activeProjects, recentInbox, todayHabits, dailyPlan, userState] =
     await Promise.all([
       getTodayTasks(),
       getTopTasks(3),
@@ -25,6 +27,7 @@ export default async function DashboardPage() {
       getInboxEntries("PENDING"),
       getTodayHabits(),
       buildDailyPlan(session.user.id),
+      getUserState(session.user.id),
     ]);
 
   return (
@@ -36,6 +39,7 @@ export default async function DashboardPage() {
         <QuickAdd />
       </div>
 
+      <DashboardUserState state={userState} />
       <DashboardDailySummary plan={dailyPlan} />
       <DashboardTopTasks tasks={topTasks} />
 

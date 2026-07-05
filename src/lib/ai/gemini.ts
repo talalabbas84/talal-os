@@ -1,6 +1,23 @@
+import { z } from "zod";
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import { captureResultSchema, type CaptureResult } from "./schema";
-import { buildSystemPrompt, buildRepairPrompt } from "./prompts";
+import {
+  captureResultSchema,
+  intentResultSchema,
+  recommendationSchema,
+  reflectionResultSchema,
+  type CaptureResult,
+  type IntentResultOutput,
+  type RecommendationOutput,
+  type ReflectionResultOutput,
+} from "./schema";
+import {
+  buildSystemPrompt,
+  buildRepairPrompt,
+  buildIntentPrompt,
+  buildRecommendationPrompt,
+  buildReflectionPrompt,
+  buildQuestionPrompt,
+} from "./prompts";
 import type { AIProvider } from "./types";
 
 const MODEL = process.env.GEMINI_MODEL ?? "gemini-2.0-flash";
@@ -40,47 +57,69 @@ async function callModel(
   return result.response.text();
 }
 
-function parseAndValidate(
-  raw: string,
-): { ok: true; data: CaptureResult } | { ok: false; error: string; raw: string } {
-  const cleaned = stripMarkdown(raw);
 
+function parseWith<T>(
+  raw: string,
+  schema: z.ZodType<T>,
+): { ok: true; data: T } | { ok: false; error: string; raw: string } {
+  const cleaned = stripMarkdown(raw);
   let parsed: unknown;
   try {
     parsed = JSON.parse(cleaned);
   } catch (e) {
     return { ok: false, error: `JSON.parse failed: ${String(e)}`, raw: cleaned };
   }
-
-  const result = captureResultSchema.safeParse(parsed);
+  const result = schema.safeParse(parsed);
   if (result.success) return { ok: true, data: result.data };
   return {
     ok: false,
-    error: result.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join("; "),
+    error: result.error.issues.map((i) => `${String(i.path.join("."))}: ${i.message}`).join("; "),
     raw: cleaned,
   };
+}
+
+async function callWithRetry<T>(
+  client: GoogleGenerativeAI,
+  systemPrompt: string,
+  userMessage: string,
+  schema: z.ZodType<T>,
+): Promise<T> {
+  const raw1 = await callModel(client, systemPrompt, userMessage);
+  const a1 = parseWith(raw1, schema);
+  if (a1.ok) return a1.data;
+
+  const raw2 = await callModel(client, systemPrompt, buildRepairPrompt(a1.error, a1.raw));
+  const a2 = parseWith(raw2, schema);
+  if (a2.ok) return a2.data;
+
+  throw new Error(`Gemini validation failed after retry. Last error: ${a2.error}`);
 }
 
 export const geminiProvider: AIProvider = {
   async organizeCapture(input: string, contextPrompt?: string): Promise<CaptureResult> {
     const client = getClient();
-    const systemPrompt = buildSystemPrompt(todayISO(), contextPrompt);
+    return callWithRetry(client, buildSystemPrompt(todayISO(), contextPrompt), input, captureResultSchema);
+  },
 
-    // First attempt
-    const raw1 = await callModel(client, systemPrompt, input);
-    const attempt1 = parseAndValidate(raw1);
-    if (attempt1.ok) return attempt1.data;
+  async classifyIntent(text: string, contextSummary?: string): Promise<IntentResultOutput> {
+    const client = getClient();
+    return callWithRetry(client, buildIntentPrompt(contextSummary), text, intentResultSchema);
+  },
 
-    // Retry with a repair prompt — model already has context from the chat history
-    // We create a fresh call with the repair prompt as the user message so
-    // the model sees what went wrong and can fix it.
-    const repairMessage = buildRepairPrompt(attempt1.error, attempt1.raw);
-    const raw2 = await callModel(client, systemPrompt, repairMessage);
-    const attempt2 = parseAndValidate(raw2);
-    if (attempt2.ok) return attempt2.data;
+  async generateRecommendation(text: string, contextPrompt: string): Promise<RecommendationOutput> {
+    const client = getClient();
+    return callWithRetry(client, buildRecommendationPrompt(contextPrompt), text, recommendationSchema);
+  },
 
-    throw new Error(
-      `Gemini response failed validation after retry. Last error: ${attempt2.error}`,
-    );
+  async generateReflection(text: string): Promise<ReflectionResultOutput> {
+    const client = getClient();
+    return callWithRetry(client, buildReflectionPrompt(), text, reflectionResultSchema);
+  },
+
+  async answerQuestion(text: string, contextPrompt: string): Promise<string> {
+    const client = getClient();
+    const systemPrompt = buildQuestionPrompt(contextPrompt);
+    const raw = await callModel(client, systemPrompt, text);
+    return stripMarkdown(raw) || "I couldn't find a clear answer based on your context.";
   },
 };

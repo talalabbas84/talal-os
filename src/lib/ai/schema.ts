@@ -136,6 +136,37 @@ export const captureResultSchema = z.object({
   data: captureDataSchema,
 });
 
+// ── Intent schema ─────────────────────────────────────────────────────────────
+
+export const INTENT_VALUES = [
+  "CREATE", "UPDATE", "MEMORY", "DECISION", "PLAN",
+  "QUESTION", "REFLECTION", "JOURNAL", "UNKNOWN",
+] as const;
+
+export const intentResultSchema = z.object({
+  intent: z.enum(INTENT_VALUES),
+  confidence: confidenceSchema,
+  reason: z.string().min(1),
+});
+
+// ── Recommendation schema ─────────────────────────────────────────────────────
+
+export const recommendationSchema = z.object({
+  summary: z.string().min(1),
+  reasoning: z.string().min(1),
+  topTask: z.string().nullable().default(null),
+  thingsToIgnore: z.array(z.string()).default([]),
+  suggestedMode: z.enum(["RECOVERY", "FOCUS", "NORMAL"]).nullable().default(null),
+});
+
+// ── Reflection schema ─────────────────────────────────────────────────────────
+
+export const reflectionResultSchema = z.object({
+  reflection: z.string().min(1),
+  journal: journalOutputSchema,
+  memoryCandidates: z.array(memoryCandidateSchema).default([]),
+});
+
 // ── Inferred types ────────────────────────────────────────────────────────────
 
 export type TaskOutput = z.infer<typeof taskOutputSchema>;
@@ -148,3 +179,6 @@ export type MemoryCandidateOutput = z.infer<typeof memoryCandidateSchema>;
 export type CommandOutput = z.infer<typeof commandOutputSchema>;
 export type CaptureData = z.infer<typeof captureDataSchema>;
 export type CaptureResult = z.infer<typeof captureResultSchema>;
+export type IntentResultOutput = z.infer<typeof intentResultSchema>;
+export type RecommendationOutput = z.infer<typeof recommendationSchema>;
+export type ReflectionResultOutput = z.infer<typeof reflectionResultSchema>;

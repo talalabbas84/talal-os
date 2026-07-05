@@ -167,6 +167,80 @@ JSON structure:
 }`;
 }
 
+// ── Intent classification prompt ──────────────────────────────────────────────
+
+export function buildIntentPrompt(contextSummary?: string): string {
+  const ctx = contextSummary ? `User context: ${contextSummary}\n\n` : "";
+  return `${ctx}Classify the user's capture into ONE intent. Return ONLY valid JSON.
+
+Intents:
+- CREATE: Adding new tasks, ideas, reminders, projects. "I need to X", "Buy Y", "Idea for Z"
+- UPDATE: Reporting completion or changes. "I finished X", "Mark X done", "Move X to tomorrow"
+- MEMORY: Identity insight, life principle, realization. "I realized", "I always", "The thing about me"
+- DECISION: Overwhelmed, seeking guidance. "I'm overwhelmed", "What should I work on", "Feeling stuck"
+- PLAN: Requesting a plan. "Plan my day", "Plan my week", "What's my focus today"
+- QUESTION: Asking for information. "What is X", "How do I Y", "Can you explain"
+- REFLECTION: Emotional processing. "I feel anxious", "Feeling low today", "I'm struggling"
+- JOURNAL: Recapping what happened. "Today I did", "I accomplished", "Here's what happened"
+- UNKNOWN: Cannot confidently classify
+
+Return: { "intent": "...", "confidence": "high|medium|low", "reason": "one sentence" }`;
+}
+
+// ── Recommendation prompt ─────────────────────────────────────────────────────
+
+export function buildRecommendationPrompt(contextPrompt: string): string {
+  return `${contextPrompt}
+
+The user is asking for help deciding what to do or feeling overwhelmed. Do NOT create tasks.
+
+Analyze their context and return a structured recommendation. Return ONLY valid JSON.
+
+{
+  "summary": "2-3 sentence direct recommendation",
+  "reasoning": "why you're recommending this",
+  "topTask": "single most important task name, or null",
+  "thingsToIgnore": ["specific things they can safely skip today"],
+  "suggestedMode": "RECOVERY|FOCUS|NORMAL|null"
+}
+
+suggestedMode:
+- RECOVERY: they're sick, overwhelmed, or exhausted — do bare minimum
+- FOCUS: clear high-priority task — block distractions and do it
+- NORMAL: standard day, balance tasks and habits
+- null: unclear`;
+}
+
+// ── Reflection prompt ─────────────────────────────────────────────────────────
+
+export function buildReflectionPrompt(): string {
+  return `The user is processing emotions or reflecting on their day. Extract journal fields and write a grounding reflection.
+
+Return ONLY valid JSON:
+{
+  "reflection": "3-4 grounded sentences, no motivational language, start with observation not 'I'",
+  "journal": {
+    "feeling": "how they feel",
+    "accomplished": "what they did today if mentioned",
+    "distractedBy": "what distracted them if mentioned",
+    "improveTomorrow": "what they want to do differently if mentioned"
+  },
+  "memoryCandidates": []
+}
+
+Only populate journal fields from what the user explicitly said. Empty string if not mentioned.`;
+}
+
+// ── Question prompt ───────────────────────────────────────────────────────────
+
+export function buildQuestionPrompt(contextPrompt: string): string {
+  return `${contextPrompt}
+
+The user is asking a question. Answer directly and concisely using their context where relevant.
+Return ONLY a plain text answer — no JSON, no markdown headers, no lists unless genuinely needed.
+3-5 sentences max. Be specific to their situation.`;
+}
+
 export function buildRepairPrompt(validationError: string, previousResponse: string): string {
   return `Your previous response failed JSON schema validation.
 

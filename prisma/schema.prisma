@@ -20,6 +20,23 @@ model User {
   dailyLogs     DailyLog[]
   habits        Habit[]
   memoryEntries MemoryEntry[]
+  userState     UserState?
+}
+
+model UserState {
+  id             String    @id @default(cuid())
+  currentMood    String?
+  energyLevel    Level?
+  focusLevel     Level?
+  recoveryMode   Boolean   @default(false)
+  currentMission String?
+  weekFocus      String?
+  lastReflection DateTime?
+  lastPlanning   DateTime?
+  updatedAt      DateTime  @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
 
 model InboxEntry {
