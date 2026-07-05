@@ -26,6 +26,16 @@ export interface IntentResult {
   reason: string;
 }
 
+// ── Articulation ─────────────────────────────────────────────────────────────
+
+export interface ArticulationResult {
+  original: string;
+  articulated: string;
+  confidence: "high" | "medium" | "low";
+  changed: boolean;
+  notes: string;
+}
+
 // ── Action types ──────────────────────────────────────────────────────────────
 
 export const ACTION_TYPES = [
@@ -195,8 +205,13 @@ export interface PlanSummary {
 // ── Pipeline result ───────────────────────────────────────────────────────────
 // Discriminated union — the capture-view renders based on intent.
 
-export type PipelineResult =
-  | {
+type PipelineBase = {
+  articulation: ArticulationResult;
+};
+
+export type PipelineResult = PipelineBase &
+  (
+    | {
       intent: "CREATE" | "UNKNOWN";
       intentResult: IntentResult;
       capture: import("@/lib/ai/types").CaptureResult;
@@ -237,7 +252,8 @@ export type PipelineResult =
       intentResult: IntentResult;
       candidates: MemoryCandidateOutput[];
       actions: PlannedAction[];
-    };
+    }
+  );
 
 // ── Execution result ──────────────────────────────────────────────────────────
 

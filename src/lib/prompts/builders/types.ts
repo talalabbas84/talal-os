@@ -1,4 +1,5 @@
 export type BrainName =
+  | "articulation"
   | "decision"
   | "planning"
   | "reflection"

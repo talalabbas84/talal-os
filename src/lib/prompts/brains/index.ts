@@ -1,3 +1,4 @@
+import { ArticulationPrompt } from "./articulation";
 import { CoachPrompt } from "./coach";
 import { DecisionPrompt } from "./decision";
 import { FinancePrompt } from "./finance";
@@ -10,6 +11,7 @@ import { ReflectionPrompt } from "./reflection";
 import type { BrainName, BrainPrompt } from "../builders/types";
 
 export const brainPrompts = {
+  articulation: ArticulationPrompt,
   decision: DecisionPrompt,
   planning: PlanningPrompt,
   reflection: ReflectionPrompt,
@@ -28,6 +30,7 @@ export function getBrainPrompt(brain: BrainName): BrainPrompt {
 }
 
 export {
+  ArticulationPrompt,
   CoachPrompt,
   DecisionPrompt,
   FinancePrompt,

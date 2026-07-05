@@ -1,13 +1,14 @@
 // Decision Engine — the core orchestrator of the intelligence pipeline.
 //
 // Flow:
-//   text → Intent Router → Context Builder → (workflow) → Action Planner → PipelineResult
+//   text → Articulation Engine → Intent Router → Context Builder → (workflow) → Action Planner → PipelineResult
 //
 // Each intent routes to a different workflow.
 // The engine never writes to the database — that is the execution engine's job.
 
 import { getAIProvider } from "@/lib/ai/provider";
 import { buildUserContext } from "@/lib/context/context-builder";
+import { articulateCapture } from "./articulation-engine";
 import { routeIntent } from "./intent-router";
 import { generateRecommendation } from "./recommendation-engine";
 import { runPlanningEngine } from "./planning-engine";
@@ -27,9 +28,11 @@ export async function processCapture(
   text: string,
 ): Promise<PipelineResult> {
   const provider = getAIProvider();
+  const articulation = await articulateCapture(text);
+  const articulatedText = articulation.articulated;
 
-  // 1. Classify intent (fast, minimal context)
-  const intentResult: IntentResult = await routeIntent(text);
+  // 1. Classify intent from the clarified capture (fast, minimal context)
+  const intentResult: IntentResult = await routeIntent(articulatedText);
 
   // 2. Build full user context (needed by most workflows)
   const { prompt: contextPrompt } = await buildUserContext(userId);
@@ -38,9 +41,10 @@ export async function processCapture(
   switch (intentResult.intent) {
     case "UPDATE": {
       // User is reporting completion or requesting changes to existing data
-      const capture = await provider.organizeCapture(text, contextPrompt);
+      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const commands = capture.data.commands;
       return {
+        articulation,
         intent: "UPDATE",
         intentResult,
         commands,
@@ -49,8 +53,9 @@ export async function processCapture(
     }
 
     case "DECISION": {
-      const recommendation = await generateRecommendation(text, contextPrompt);
+      const recommendation = await generateRecommendation(articulatedText, contextPrompt);
       return {
+        articulation,
         intent: "DECISION",
         intentResult,
         recommendation,
@@ -60,7 +65,7 @@ export async function processCapture(
 
     case "REFLECTION":
     case "JOURNAL": {
-      const reflectionData = await provider.generateReflection(text);
+      const reflectionData = await provider.generateReflection(articulatedText);
       const data = {
         reflection: reflectionData.reflection,
         journal: {
@@ -72,6 +77,7 @@ export async function processCapture(
         memoryCandidates: reflectionData.memoryCandidates,
       };
       return {
+        articulation,
         intent: intentResult.intent as "REFLECTION" | "JOURNAL",
         intentResult,
         reflectionData: data,
@@ -80,8 +86,9 @@ export async function processCapture(
     }
 
     case "QUESTION": {
-      const answer = await provider.answerQuestion(text, contextPrompt);
+      const answer = await provider.answerQuestion(articulatedText, contextPrompt);
       return {
+        articulation,
         intent: "QUESTION",
         intentResult,
         answer,
@@ -92,6 +99,7 @@ export async function processCapture(
     case "PLAN": {
       const plan = await runPlanningEngine(userId);
       return {
+        articulation,
         intent: "PLAN",
         intentResult,
         plan,
@@ -101,9 +109,10 @@ export async function processCapture(
 
     case "MEMORY": {
       // Pure memory extraction — no full organize
-      const capture = await provider.organizeCapture(text, contextPrompt);
+      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const candidates = capture.data.memoryCandidates;
       return {
+        articulation,
         intent: "MEMORY",
         intentResult,
         candidates,
@@ -115,7 +124,7 @@ export async function processCapture(
     case "UNKNOWN":
     default: {
       // Full organize flow — returns rich structured data for the capture-view
-      const capture = await provider.organizeCapture(text, contextPrompt);
+      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       // Default inclusion (all high/medium confidence included; projects opt-in; memories by importance)
       const d = capture.data;
       const defaultInclusion = {
@@ -133,6 +142,7 @@ export async function processCapture(
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       };
       return {
+        articulation,
         intent: intentResult.intent as "CREATE" | "UNKNOWN",
         intentResult,
         capture,

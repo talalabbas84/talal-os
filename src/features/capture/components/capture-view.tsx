@@ -338,6 +338,8 @@ function PreviewView({
       {/* Intent badge */}
       <IntentBadge intentResult={result.intentResult} />
 
+      <ArticulationPanel articulation={result.articulation} />
+
       {/* Intent-specific preview */}
       {(result.intent === "CREATE" || result.intent === "UNKNOWN") && createInclusion && (
         <CreatePreview
@@ -480,6 +482,52 @@ function IntentBadge({ intentResult }: { intentResult: { intent: string; confide
   );
 }
 
+function ArticulationPanel({
+  articulation,
+}: {
+  articulation: PipelineResult["articulation"];
+}) {
+  return (
+    <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2">
+          <Sparkles className="h-4 w-4 text-neutral-400" />
+          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">
+            AI Understanding
+          </span>
+        </div>
+        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium uppercase text-neutral-500 dark:bg-neutral-800">
+          {articulation.confidence}
+        </span>
+      </div>
+
+      <div className="space-y-2">
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Original Capture
+          </p>
+          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm leading-relaxed text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400">
+            {articulation.original}
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Understood As
+          </p>
+          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm font-medium leading-relaxed text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50">
+            {articulation.articulated}
+          </p>
+        </div>
+      </div>
+
+      {articulation.notes && (
+        <p className="text-xs text-neutral-400">{articulation.notes}</p>
+      )}
+    </div>
+  );
+}
+
 // ── CREATE preview ────────────────────────────────────────────────────────────
 
 function CreatePreview({
@@ -580,7 +628,7 @@ function CreatePreview({
       )}
 
       {d.commands.length > 0 && (
-        <Section icon={Zap} title="Actions" count={d.commands.length} note="Executes against existing data">
+        <Section icon={Zap} title="Detected Actions" count={d.commands.length} note="Executes against existing data">
           {d.commands.map((cmd, i) => (
             <ItemRow key={i} included={!!inclusion.commands[i]} onToggle={() => onToggle("commands", i)} confidence={cmd.confidence} alwaysShowToggle>
               <div>
