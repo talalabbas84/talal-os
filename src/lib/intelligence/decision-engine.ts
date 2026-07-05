@@ -19,6 +19,7 @@ import {
   planFromReflection,
   planFromMemoryCandidates,
   planFromDailyPlan,
+  planFromSmartCaptureShortcut,
 } from "./action-planner";
 import type { PipelineResult, IntentResult } from "./types";
 
@@ -30,6 +31,19 @@ export async function processCapture(
   const provider = getAIProvider();
   const articulation = await articulateCapture(text);
   const articulatedText = articulation.articulated;
+
+  const shortcutActions = isStandaloneSmartShortcut(articulatedText)
+    ? planFromSmartCaptureShortcut(articulatedText)
+    : [];
+  if (shortcutActions.length > 0) {
+    return {
+      articulation,
+      intent: "UPDATE",
+      intentResult: { intent: "UPDATE", confidence: "high", reason: "Smart capture shortcut detected." },
+      commands: [],
+      actions: shortcutActions,
+    };
+  }
 
   // 1. Classify intent from the clarified capture (fast, minimal context)
   const intentResult: IntentResult = await routeIntent(articulatedText);
@@ -151,4 +165,10 @@ export async function processCapture(
       };
     }
   }
+}
+
+function isStandaloneSmartShortcut(text: string): boolean {
+  const lower = text.trim().toLowerCase();
+  if (lower.length > 90) return false;
+  return /\b(i am done|i'm done|im done|finished it|i finished it|done with it|not today|tomorrow|skip|later|reschedule|move it)\b/.test(lower);
 }

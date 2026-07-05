@@ -1,54 +1,273 @@
-import { auth } from "@/lib/auth";
+import Link from "next/link";
 import { redirect } from "next/navigation";
-import { getTodayTasks, getTopTasks } from "@/features/tasks/actions/task.actions";
-import { getProjects } from "@/features/projects/actions/project.actions";
-import { getInboxEntries } from "@/features/inbox/actions/inbox.actions";
-import { getTodayHabits } from "@/features/habits/actions/habit.actions";
-import { getUserState } from "@/features/dashboard/actions/user-state.actions";
-import { DashboardTaskList } from "@/features/dashboard/components/dashboard-task-list";
-import { DashboardProjectList } from "@/features/dashboard/components/dashboard-project-list";
-import { DashboardInboxList } from "@/features/dashboard/components/dashboard-inbox-list";
-import { DashboardHabitList } from "@/features/dashboard/components/dashboard-habit-list";
+import {
+  ArrowRight,
+  BookOpen,
+  Brain,
+  CheckCircle2,
+  Inbox,
+  MessageCircle,
+  Moon,
+  Sparkles,
+  Target,
+  Zap,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { GenerateTodayButton } from "@/features/dashboard/components/generate-today-button";
 import { DashboardTopTasks } from "@/features/dashboard/components/dashboard-top-tasks";
-import { DashboardDailySummary } from "@/features/dashboard/components/dashboard-daily-summary";
-import { DashboardUserState } from "@/features/dashboard/components/dashboard-user-state";
-import { QuickAdd } from "@/features/dashboard/components/quick-add";
+import { auth } from "@/lib/auth";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 
 export default async function DashboardPage() {
   const session = await auth();
   if (!session?.user?.id) redirect("/login");
 
-  const [todayTasks, topTasks, activeProjects, recentInbox, todayHabits, dailyPlan, userState] =
-    await Promise.all([
-      getTodayTasks(),
-      getTopTasks(3),
-      getProjects("ACTIVE"),
-      getInboxEntries("PENDING"),
-      getTodayHabits(),
-      buildDailyPlan(session.user.id),
-      getUserState(session.user.id),
-    ]);
+  const plan = await buildDailyPlan(session.user.id);
+  const firstName = session.user.name?.split(" ")[0] ?? "Talal";
+  const showReflectionReminder = !plan.journalFilled && getHourInTimeZone("America/Toronto") >= 20;
+  const nextAction = plan.topTasks[0]?.title ?? plan.habitsDue[0]?.name ?? "Capture what is on your mind.";
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <h1 className="text-xl font-semibold text-neutral-900 dark:text-neutral-50">
-          Dashboard
-        </h1>
-        <QuickAdd />
-      </div>
+    <div className="mx-auto max-w-5xl space-y-5 pb-20 sm:space-y-6">
+      <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm dark:border-neutral-800 dark:bg-neutral-950 sm:p-6">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm font-medium text-neutral-500 dark:text-neutral-400">
+              <Sparkles className="h-4 w-4" />
+              Good Morning
+            </div>
+            <h1 className="text-2xl font-semibold tracking-tight text-neutral-950 dark:text-neutral-50">
+              {firstName}, do this now:
+            </h1>
+            <p className="max-w-2xl text-lg text-neutral-700 dark:text-neutral-300">
+              {nextAction}
+            </p>
+          </div>
+          <div className="flex shrink-0 gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href="/capture">Capture</Link>
+            </Button>
+            <GenerateTodayButton />
+          </div>
+        </div>
 
-      <DashboardUserState state={userState} />
-      <DashboardDailySummary plan={dailyPlan} />
-      <DashboardTopTasks tasks={topTasks} />
+        <div className="mt-5 grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Signal label="Focus" value={plan.focusMode ?? "Normal execution"} icon={Zap} />
+          <Signal label="Inbox" value={`${plan.inboxCount} pending`} icon={Inbox} />
+          <Signal label="Mode" value={plan.recoveryMode ? "Recovery" : "Execution"} icon={Moon} />
+        </div>
+      </section>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <DashboardTaskList tasks={todayTasks} />
-        <DashboardProjectList projects={activeProjects} />
-        <DashboardInboxList entries={recentInbox.slice(0, 5)} />
-        <DashboardHabitList habits={todayHabits} />
+      {showReflectionReminder && <ReflectionReminder />}
+
+      <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1.25fr_0.75fr]">
+        <div className="space-y-5">
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <Brain className="h-4 w-4" />
+                Companion Summary
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm leading-6 text-neutral-700 dark:text-neutral-300">
+                {plan.summary}
+              </p>
+              {plan.ideasToIgnore.length > 0 && (
+                <div className="mt-4 rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">
+                    Ideas to ignore until the Top 3 are done
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm text-neutral-600 dark:text-neutral-400">
+                    {plan.ideasToIgnore.map((idea) => (
+                      <li key={idea}>• {idea}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <Target className="h-4 w-4" />
+                Today&apos;s Mission
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-xl font-semibold leading-8 text-neutral-950 dark:text-neutral-50">
+                {plan.todayMission}
+              </p>
+              <p className="mt-3 text-sm text-neutral-500">{plan.suggestion}</p>
+            </CardContent>
+          </Card>
+
+          <DashboardTopTasks tasks={plan.topTasks} />
+        </div>
+
+        <div className="space-y-5">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-sm font-medium text-neutral-500">
+                Remaining Habits
+              </CardTitle>
+              <Link href="/habits" className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-700">
+                All <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {plan.habitsDue.length === 0 ? (
+                <EmptyLine text="Habits are clear." />
+              ) : (
+                plan.habitsDue.map((habit) => (
+                  <div key={habit.id} className="flex items-center gap-3 rounded-lg bg-neutral-50 p-3 dark:bg-neutral-900">
+                    <CheckCircle2 className="h-4 w-4 text-neutral-300" />
+                    <span className="text-sm text-neutral-800 dark:text-neutral-200">{habit.name}</span>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="text-sm font-medium text-neutral-500">
+                People Follow-up
+              </CardTitle>
+              <Link href="/people" className="flex items-center gap-1 text-xs text-neutral-400 hover:text-neutral-700">
+                People <ArrowRight className="h-3 w-3" />
+              </Link>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {plan.peopleToFollowUp.length === 0 ? (
+                <EmptyLine text="No relationship follow-ups today." />
+              ) : (
+                plan.peopleToFollowUp.map((item) => (
+                  <div key={item} className="rounded-lg border border-neutral-100 p-3 dark:border-neutral-800">
+                    <p className="text-sm text-neutral-800 dark:text-neutral-200">{item}</p>
+                  </div>
+                ))
+              )}
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-neutral-500">
+                Inbox Count
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Link
+                href="/inbox"
+                className="flex items-center justify-between rounded-xl bg-neutral-50 p-4 transition-colors hover:bg-neutral-100 dark:bg-neutral-900 dark:hover:bg-neutral-800"
+              >
+                <div>
+                  <p className="text-3xl font-semibold text-neutral-950 dark:text-neutral-50">
+                    {plan.inboxCount}
+                  </p>
+                  <p className="text-sm text-neutral-500">pending captures</p>
+                </div>
+                <Inbox className="h-5 w-5 text-neutral-400" />
+              </Link>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-neutral-500">
+                Capture
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button asChild className="w-full justify-between" size="lg">
+                <Link href="/capture">
+                  Capture raw thought
+                  <MessageCircle className="h-4 w-4" />
+                </Link>
+              </Button>
+              <p className="mt-3 text-xs leading-5 text-neutral-500">
+                Messy wording is expected. Talal OS will articulate it before organizing anything.
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm font-medium text-neutral-500">
+                Recent Reflection
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {plan.recentReflection ? (
+                <div className="space-y-2 text-sm text-neutral-700 dark:text-neutral-300">
+                  {plan.recentReflection.feeling && <p>Feeling: {plan.recentReflection.feeling}</p>}
+                  {plan.recentReflection.accomplished && <p>Went well: {plan.recentReflection.accomplished}</p>}
+                  {plan.recentReflection.improve && <p>Next improvement: {plan.recentReflection.improve}</p>}
+                </div>
+              ) : (
+                <EmptyLine text="No reflection saved yet." />
+              )}
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
+}
+
+function Signal({
+  label,
+  value,
+  icon: Icon,
+}: {
+  label: string;
+  value: string;
+  icon: React.ElementType;
+}) {
+  return (
+    <div className="rounded-xl bg-neutral-50 p-3 dark:bg-neutral-900">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-neutral-400">
+        <Icon className="h-3.5 w-3.5" />
+        {label}
+      </div>
+      <p className="mt-1 text-sm font-medium text-neutral-800 dark:text-neutral-200">{value}</p>
+    </div>
+  );
+}
+
+function ReflectionReminder() {
+  return (
+    <Card className="border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/40">
+      <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="flex items-center gap-2 text-sm font-semibold text-amber-800 dark:text-amber-200">
+            <BookOpen className="h-4 w-4" />
+            Today&apos;s Reflection Missing
+          </div>
+          <p className="mt-2 text-sm leading-6 text-amber-800/80 dark:text-amber-200/80">
+            What went well? What was difficult? What did you learn?
+          </p>
+        </div>
+        <Button asChild variant="outline" className="border-amber-300 bg-white dark:border-amber-800 dark:bg-neutral-950">
+          <Link href="/capture">Capture reflection</Link>
+        </Button>
+      </CardContent>
+    </Card>
+  );
+}
+
+function EmptyLine({ text }: { text: string }) {
+  return <p className="py-3 text-center text-sm text-neutral-400">{text}</p>;
+}
+
+function getHourInTimeZone(timeZone: string): number {
+  const hour = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hour: "2-digit",
+    hour12: false,
+  }).format(new Date());
+  return Number(hour);
 }

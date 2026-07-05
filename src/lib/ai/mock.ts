@@ -516,7 +516,6 @@ function extractCommands(text: string): CommandOutput[] {
 // ── People extraction ─────────────────────────────────────────────────────────
 
 // Common first names to help distinguish people from other proper nouns
-const NAME_PATTERN = /\b([A-Z][a-z]{1,20})\b/g;
 const EXCLUDED_NAMES = new Set([
   "I", "The", "This", "That", "My", "Today", "Tomorrow", "Monday", "Tuesday",
   "Wednesday", "Thursday", "Friday", "Saturday", "Sunday", "January", "February",
@@ -756,7 +755,7 @@ const INSIGHT_PATTERNS: InsightPattern[] = [
     // Overthinking dynamic
     regex: /overthink|felt like i was overthinking|overexplain/i,
     type: "HOW_TO_APPROACH",
-    buildInsight: (name, _match, _sentence) => ({
+    buildInsight: (name) => ({
       type: "HOW_TO_APPROACH",
       title: `Avoid over-explaining with ${name}`,
       content: `Based on this interaction, ${name} may prefer concise communication. Over-explaining might slow things down — trust them to ask if they need more detail.`,
@@ -955,7 +954,7 @@ function generateReflectionMock(text: string): ReflectionResultOutput {
 // ── Provider ──────────────────────────────────────────────────────────────────
 
 export const mockProvider: AIProvider = {
-  async organizeCapture(input: string, _contextPrompt?: string): Promise<CaptureResult> {
+  async organizeCapture(input: string): Promise<CaptureResult> {
     await new Promise((r) => setTimeout(r, 600));
 
     const todayISO = dateISO(0);
@@ -1009,7 +1008,7 @@ export const mockProvider: AIProvider = {
     };
   },
 
-  async classifyIntent(text: string, _contextSummary?: string): Promise<IntentResultOutput> {
+  async classifyIntent(text: string): Promise<IntentResultOutput> {
     await new Promise((r) => setTimeout(r, 100));
     return classifyIntentMock(text);
   },

@@ -1,10 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { Users, Search, ChevronRight } from "lucide-react";
 import type { PersonWithCounts } from "../actions/people.actions";
-import { cn } from "@/utils/cn";
 
 export function PeopleView({ people }: { people: PersonWithCounts[] }) {
   const [query, setQuery] = useState("");

@@ -21,6 +21,8 @@ model User {
   habits            Habit[]
   memoryEntries     MemoryEntry[]
   userState         UserState?
+  dailyPlans        DailyPlan[]
+  followUps         FollowUp[]
   people            Person[]
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
@@ -131,6 +133,49 @@ model DailyLog {
   @@unique([userId, date])
   @@index([userId])
   @@index([date])
+}
+
+model DailyPlan {
+  id                 String    @id @default(cuid())
+  date               DateTime  @db.Date
+  summary            String
+  todayMission       String
+  topThreeTaskIds    String[]  @default([])
+  recommendedHabits  String[]  @default([])
+  peopleToFollowUp   String[]  @default([])
+  ideasToIgnore      String[]  @default([])
+  focusMode          String?
+  recoveryMode       Boolean   @default(false)
+  generatedAt        DateTime  @default(now())
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, date])
+  @@index([userId])
+  @@index([date])
+}
+
+model FollowUp {
+  id          String         @id @default(cuid())
+  title       String
+  type        FollowUpType
+  dueDate     DateTime?
+  status      FollowUpStatus @default(OPEN)
+  reason      String?
+  createdFrom String?
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([status])
+  @@index([dueDate])
+  @@index([type])
 }
 
 model Habit {
@@ -349,6 +394,20 @@ enum Level {
   LOW
   MEDIUM
   HIGH
+}
+
+enum FollowUpType {
+  TASK
+  PERSON
+  HEALTH
+  BUSINESS
+  PERSONAL
+}
+
+enum FollowUpStatus {
+  OPEN
+  DONE
+  SKIPPED
 }
 
 enum MemoryType {

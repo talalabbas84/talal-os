@@ -25,7 +25,7 @@ import {
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
-import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput, PersonInsightItemOutput } from "@/lib/ai/types";
+import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
@@ -216,7 +216,6 @@ export function CaptureView({ userName }: { userName: string }) {
           result={pipelineResult}
           createInclusion={createInclusion}
           actionInclusion={actionInclusion}
-          memoryEdits={memoryEdits}
           onToggleCreate={toggleCreateItem}
           onToggleCreateJournal={() => setCreateInclusion((p) => p && { ...p, journal: !p.journal })}
           onTogglePersonInsight={togglePersonInsight}
@@ -300,14 +299,13 @@ function InputView({
 // ── Preview step ──────────────────────────────────────────────────────────────
 
 function PreviewView({
-  result, createInclusion, actionInclusion, memoryEdits,
+  result, createInclusion, actionInclusion,
   onToggleCreate, onToggleCreateJournal, onTogglePersonInsight, onToggleAction, onMemorySaveEdit,
   onEdit, onSave, isSaving, error,
 }: {
   result: PipelineResult;
   createInclusion: CreateInclusion | null;
   actionInclusion: ActionInclusion | null;
-  memoryEdits: Record<number, MemoryEdit>;
   onToggleCreate: (key: keyof Omit<CreateInclusion, "journal" | "personInsights">, index: number) => void;
   onToggleCreateJournal: () => void;
   onTogglePersonInsight: (personIndex: number, insightIndex: number) => void;
@@ -345,7 +343,6 @@ function PreviewView({
         <CreatePreview
           capture={result.capture}
           inclusion={createInclusion}
-          memoryEdits={memoryEdits}
           onToggle={onToggleCreate}
           onToggleJournal={onToggleCreateJournal}
           onTogglePersonInsight={onTogglePersonInsight}
@@ -396,10 +393,8 @@ function PreviewView({
       {result.intent === "MEMORY" && actionInclusion && (
         <MemoryPreview
           candidates={result.candidates}
-          actions={result.actions}
           actionInclusion={actionInclusion}
           onToggleAction={onToggleAction}
-          memoryEdits={memoryEdits}
           onMemorySaveEdit={onMemorySaveEdit}
         />
       )}
@@ -531,11 +526,10 @@ function ArticulationPanel({
 // ── CREATE preview ────────────────────────────────────────────────────────────
 
 function CreatePreview({
-  capture, inclusion, memoryEdits, onToggle, onToggleJournal, onTogglePersonInsight, onMemorySaveEdit,
+  capture, inclusion, onToggle, onToggleJournal, onTogglePersonInsight, onMemorySaveEdit,
 }: {
   capture: import("@/lib/ai/types").CaptureResult;
   inclusion: CreateInclusion;
-  memoryEdits: Record<number, MemoryEdit>;
   onToggle: (key: keyof Omit<CreateInclusion, "journal" | "personInsights">, index: number) => void;
   onToggleJournal: () => void;
   onTogglePersonInsight: (personIndex: number, insightIndex: number) => void;
@@ -664,15 +658,17 @@ function CreatePreview({
 // ── UPDATE preview ────────────────────────────────────────────────────────────
 
 function UpdatePreview({
-  commands, actions, actionInclusion, onToggleAction,
+  actions, actionInclusion, onToggleAction,
 }: {
   commands: import("@/lib/ai/types").CommandOutput[];
   actions: PlannedAction[];
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
 }) {
+  const executableCount = actions.filter((action) => action.type !== "NO_ACTION").length;
+
   return (
-    <Section icon={Zap} title="Actions to Execute" count={commands.length} note="Matches existing tasks/habits">
+    <Section icon={Zap} title="Actions to Execute" count={executableCount} note="Matches existing tasks/habits">
       {actions.map((action, i) => (
         action.type !== "NO_ACTION" && (
           <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
@@ -785,7 +781,7 @@ function ReflectionPreview({
         </Section>
       )}
 
-      {actions.filter((a) => a.type !== "NO_ACTION" && a.type !== "UPDATE_JOURNAL").map((action, i) => (
+      {actions.filter((a) => a.type !== "NO_ACTION" && a.type !== "UPDATE_JOURNAL").map((action) => (
         <div key={action.id} className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           <ItemRow included={!!actionInclusion[actions.indexOf(action)]} onToggle={() => onToggleAction(actions.indexOf(action))} confidence="high" alwaysShowToggle>
             <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
@@ -878,13 +874,11 @@ function PlanPreview({
 // ── MEMORY preview ────────────────────────────────────────────────────────────
 
 function MemoryPreview({
-  candidates, actions, actionInclusion, onToggleAction, memoryEdits, onMemorySaveEdit,
+  candidates, actionInclusion, onToggleAction, onMemorySaveEdit,
 }: {
   candidates: MemoryCandidateOutput[];
-  actions: PlannedAction[];
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
-  memoryEdits: Record<number, MemoryEdit>;
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
 }) {
   return (
@@ -921,6 +915,7 @@ function SavedView({
     result.tasksCreated > 0 && `${result.tasksCreated} task${result.tasksCreated !== 1 ? "s" : ""} added`,
     result.ideasCreated > 0 && `${result.ideasCreated} idea${result.ideasCreated !== 1 ? "s" : ""} saved to Inbox`,
     result.remindersCreated > 0 && `${result.remindersCreated} reminder${result.remindersCreated !== 1 ? "s" : ""} added`,
+    result.followUpsCreated > 0 && `${result.followUpsCreated} follow-up${result.followUpsCreated !== 1 ? "s" : ""} created`,
     result.journalSaved && "Daily log updated",
     result.habitsUpdated > 0 && `${result.habitsUpdated} habit${result.habitsUpdated !== 1 ? "s" : ""} recorded`,
     result.projectsCreated > 0 && `${result.projectsCreated} project${result.projectsCreated !== 1 ? "s" : ""} created`,

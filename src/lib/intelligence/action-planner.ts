@@ -8,6 +8,7 @@ import type {
   IdeaPayload,
   MemoryPayload,
   ReminderPayload,
+  FollowUpPayload,
   ProjectPayload,
   PersonUpdatePayload,
   PersonInsightPayload,
@@ -76,6 +77,14 @@ export function planFromCapture(
     if (!inclusion.reminders[i]) return;
     const payload: ReminderPayload = { title: r.title, when: r.when };
     actions.push({ id: nextId("reminder"), type: "CREATE_REMINDER", label: `Reminder: ${r.title}`, payload });
+    const followUpPayload: FollowUpPayload = {
+      title: r.title,
+      type: inferFollowUpType(r.title),
+      dueDate: normalizeFollowUpDate(r.when),
+      reason: r.when ? `Reminder requested for ${r.when}` : "Reminder captured.",
+      createdFrom: "CAPTURE",
+    };
+    actions.push({ id: nextId("followup"), type: "CREATE_FOLLOW_UP", label: `Follow-up: ${r.title}`, payload: followUpPayload });
   });
 
   d.projects.forEach((p, i) => {
@@ -120,6 +129,8 @@ export function planFromCapture(
     actions.push(...planFromPersonUpdate({ ...p, insights: approvedInsights }));
   });
 
+  actions.push(...planSmartCaptureShortcuts(capture.reflection, d.summary));
+
   return actions;
 }
 
@@ -138,7 +149,21 @@ function planFromCommand(cmd: CommandOutput): PlannedAction[] {
     case "RESCHEDULE_TASK":
       return [{ id: nextId("cmd"), type: "RESCHEDULE_TASK", label: `Reschedule: ${cmd.target}${cmd.details ? ` → ${cmd.details}` : ""}`, payload: { taskTitle: cmd.target, details: cmd.details } }];
     case "ADD_REMINDER":
-      return [{ id: nextId("cmd"), type: "CREATE_REMINDER", label: `Reminder: ${cmd.target}`, payload: { title: cmd.target, when: cmd.details } }];
+      return [
+        { id: nextId("cmd"), type: "CREATE_REMINDER", label: `Reminder: ${cmd.target}`, payload: { title: cmd.target, when: cmd.details } },
+        {
+          id: nextId("followup"),
+          type: "CREATE_FOLLOW_UP",
+          label: `Follow-up: ${cmd.target}`,
+          payload: {
+            title: cmd.target,
+            type: inferFollowUpType(cmd.target),
+            dueDate: normalizeFollowUpDate(cmd.details),
+            reason: cmd.details ? `Reminder requested for ${cmd.details}` : "Reminder command captured.",
+            createdFrom: "CAPTURE",
+          },
+        },
+      ];
   }
 }
 
@@ -256,4 +281,82 @@ export function planFromDailyPlan(plan: PlanSummary): PlannedAction[] {
   }
 
   return actions;
+}
+
+export function planFromSmartCaptureShortcut(text: string): PlannedAction[] {
+  const lower = text.trim().toLowerCase();
+  const actions: PlannedAction[] = [];
+
+  if (/\b(i am done|i'm done|im done|finished it|i finished it|done with it)\b/.test(lower)) {
+    actions.push({
+      id: nextId("shortcut"),
+      type: "COMPLETE_TOP_TASK",
+      label: "Mark current top task done",
+      payload: {},
+    });
+  }
+
+  if (/\b(not today|tomorrow|skip|later|reschedule|move it)\b/.test(lower)) {
+    const dueDate = lower.includes("tomorrow") || lower.includes("not today") || lower.includes("skip") || lower.includes("later")
+      ? dateISO(1)
+      : null;
+
+    actions.push({
+      id: nextId("shortcut"),
+      type: "RESCHEDULE_TOP_TASK",
+      label: dueDate ? "Move current top task to tomorrow" : "Reschedule current top task",
+      payload: {
+        dueDate,
+        reason: "Smart capture shortcut detected.",
+      },
+    });
+  }
+
+  return actions;
+}
+
+function planSmartCaptureShortcuts(reflection: string, summary: string): PlannedAction[] {
+  const text = `${summary} ${reflection}`.toLowerCase();
+  const actions: PlannedAction[] = [];
+
+  if (/\b(not today|skip|later|tomorrow|reschedule)\b/.test(text)) {
+    actions.push({
+      id: nextId("followup"),
+      type: "CREATE_FOLLOW_UP",
+      label: "Follow up on deferred item",
+      payload: {
+        title: "Review deferred capture",
+        type: "TASK",
+        dueDate: text.includes("tomorrow") ? dateISO(1) : null,
+        reason: "Capture included deferral language such as not today, skip, later, tomorrow, or reschedule.",
+        createdFrom: "CAPTURE_SHORTCUT",
+      },
+    });
+  }
+
+  return actions;
+}
+
+function inferFollowUpType(title: string): FollowUpPayload["type"] {
+  const lower = title.toLowerCase();
+  if (/\b(call|text|ask|message|email|meet|sara|sarah|person|friend|mom|dad)\b/.test(lower)) return "PERSON";
+  if (/\b(gym|health|doctor|sick|sleep|workout|medicine)\b/.test(lower)) return "HEALTH";
+  if (/\b(client|business|crm|project|invoice|lead)\b/.test(lower)) return "BUSINESS";
+  return "TASK";
+}
+
+function normalizeFollowUpDate(value: string | null): string | null {
+  if (!value) return null;
+  const lower = value.toLowerCase();
+  if (lower.includes("tomorrow")) return dateISO(1);
+  if (lower.includes("today") || lower.includes("tonight")) return dateISO(0);
+  const parsed = new Date(value);
+  if (!Number.isNaN(parsed.getTime())) return parsed.toISOString().split("T")[0]!;
+  return null;
+}
+
+function dateISO(offset: number): string {
+  const date = new Date();
+  date.setDate(date.getDate() + offset);
+  return date.toISOString().split("T")[0]!;
 }

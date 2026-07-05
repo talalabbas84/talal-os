@@ -43,11 +43,14 @@ export const ACTION_TYPES = [
   "CREATE_IDEA",
   "CREATE_MEMORY",
   "CREATE_REMINDER",
+  "CREATE_FOLLOW_UP",
   "CREATE_PROJECT",
   "CREATE_PERSON_UPDATE",
   "COMPLETE_TASK",
+  "COMPLETE_TOP_TASK",
   "COMPLETE_HABIT",
   "RESCHEDULE_TASK",
+  "RESCHEDULE_TOP_TASK",
   "UPDATE_JOURNAL",
   "UPDATE_USER_STATE",
   "ENABLE_RECOVERY_MODE",
@@ -62,11 +65,14 @@ export type PlannedAction =
   | { id: string; type: "CREATE_IDEA"; label: string; payload: IdeaPayload }
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
+  | { id: string; type: "CREATE_FOLLOW_UP"; label: string; payload: FollowUpPayload }
   | { id: string; type: "CREATE_PROJECT"; label: string; payload: ProjectPayload }
   | { id: string; type: "CREATE_PERSON_UPDATE"; label: string; payload: PersonUpdatePayload }
   | { id: string; type: "COMPLETE_TASK"; label: string; payload: { taskTitle: string } }
+  | { id: string; type: "COMPLETE_TOP_TASK"; label: string; payload: Record<string, never> }
   | { id: string; type: "COMPLETE_HABIT"; label: string; payload: { habitName: string } }
   | { id: string; type: "RESCHEDULE_TASK"; label: string; payload: { taskTitle: string; details: string | null } }
+  | { id: string; type: "RESCHEDULE_TOP_TASK"; label: string; payload: { dueDate: string | null; reason: string } }
   | { id: string; type: "UPDATE_JOURNAL"; label: string; payload: JournalPayload }
   | { id: string; type: "UPDATE_USER_STATE"; label: string; payload: UserStatePayload }
   | { id: string; type: "ENABLE_RECOVERY_MODE"; label: string; payload: Record<string, never> }
@@ -105,6 +111,14 @@ export interface MemoryPayload {
 export interface ReminderPayload {
   title: string;
   when: string | null;
+}
+
+export interface FollowUpPayload {
+  title: string;
+  type: "TASK" | "PERSON" | "HEALTH" | "BUSINESS" | "PERSONAL";
+  dueDate: string | null;
+  reason?: string | null;
+  createdFrom?: string | null;
 }
 
 export interface ProjectPayload {
@@ -262,6 +276,7 @@ export interface ExecutionResult {
   ideasCreated: number;
   memoriesSaved: number;
   remindersCreated: number;
+  followUpsCreated: number;
   projectsCreated: number;
   habitsUpdated: number;
   journalSaved: boolean;

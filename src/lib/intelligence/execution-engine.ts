@@ -19,6 +19,7 @@ export async function executeActions(
     ideasCreated: 0,
     memoriesSaved: 0,
     remindersCreated: 0,
+    followUpsCreated: 0,
     projectsCreated: 0,
     habitsUpdated: 0,
     journalSaved: false,
@@ -30,11 +31,23 @@ export async function executeActions(
 
   // Prefetch for fuzzy matching (only if needed)
   const needsMatch = actions.some(
-    (a) => a.type === "COMPLETE_TASK" || a.type === "COMPLETE_HABIT" || a.type === "RESCHEDULE_TASK",
+    (a) =>
+      a.type === "COMPLETE_TASK" ||
+      a.type === "COMPLETE_TOP_TASK" ||
+      a.type === "COMPLETE_HABIT" ||
+      a.type === "RESCHEDULE_TASK" ||
+      a.type === "RESCHEDULE_TOP_TASK",
   );
   const [openTasks, activeHabits] = needsMatch
     ? await Promise.all([
-        prisma.task.findMany({ where: { userId, status: { not: "DONE" } } }),
+        prisma.task.findMany({
+          where: { userId, status: { not: "DONE" } },
+          orderBy: [
+            { priorityScore: { sort: "desc", nulls: "last" } },
+            { dueDate: { sort: "asc", nulls: "last" } },
+            { updatedAt: "desc" },
+          ],
+        }),
         prisma.habit.findMany({ where: { userId, isActive: true } }),
       ])
     : [[] as Task[], [] as Habit[]];
@@ -105,6 +118,22 @@ export async function executeActions(
           },
         });
         result.remindersCreated++;
+        break;
+      }
+
+      case "CREATE_FOLLOW_UP": {
+        const { payload } = action;
+        await prisma.followUp.create({
+          data: {
+            userId,
+            title: payload.title,
+            type: payload.type,
+            dueDate: payload.dueDate ? new Date(payload.dueDate + "T00:00:00.000Z") : null,
+            reason: payload.reason ?? null,
+            createdFrom: payload.createdFrom ?? null,
+          },
+        });
+        result.followUpsCreated++;
         break;
       }
 
@@ -217,6 +246,15 @@ export async function executeActions(
         break;
       }
 
+      case "COMPLETE_TOP_TASK": {
+        const match = openTasks[0];
+        if (match) {
+          await prisma.task.update({ where: { id: match.id }, data: { status: "DONE" } });
+          result.commandsExecuted++;
+        }
+        break;
+      }
+
       case "COMPLETE_HABIT": {
         const match = findHabitFuzzy(activeHabits, action.payload.habitName);
         if (match) {
@@ -234,6 +272,18 @@ export async function executeActions(
       case "RESCHEDULE_TASK": {
         const match = findTaskFuzzy(openTasks, action.payload.taskTitle);
         const newDate = resolveDate(action.payload.details);
+        if (match && newDate) {
+          await prisma.task.update({ where: { id: match.id }, data: { dueDate: newDate } });
+          result.commandsExecuted++;
+        }
+        break;
+      }
+
+      case "RESCHEDULE_TOP_TASK": {
+        const match = openTasks[0];
+        const newDate = action.payload.dueDate
+          ? new Date(action.payload.dueDate + "T00:00:00.000Z")
+          : resolveDate(action.payload.reason);
         if (match && newDate) {
           await prisma.task.update({ where: { id: match.id }, data: { dueDate: newDate } });
           result.commandsExecuted++;
@@ -331,6 +381,17 @@ export async function executeActions(
               energyRequired: "LOW",
             },
           });
+          await prisma.followUp.create({
+            data: {
+              userId,
+              title: ft.title,
+              type: "PERSON",
+              dueDate: ft.dueDate ? new Date(ft.dueDate + "T00:00:00.000Z") : null,
+              reason: `Follow up with ${payload.personName}.`,
+              createdFrom: "PERSON_CAPTURE",
+            },
+          });
+          result.followUpsCreated++;
         }
 
         // Create PersonInsight entries

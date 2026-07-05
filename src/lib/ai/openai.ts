@@ -4,9 +4,9 @@ const NOT_IMPLEMENTED = "OpenAI provider not yet implemented. Set AI_PROVIDER=mo
 
 // Stub — implement with OPENAI_API_KEY when ready
 export const openaiProvider: AIProvider = {
-  async organizeCapture(_input: string): Promise<CaptureResult> { throw new Error(NOT_IMPLEMENTED); },
-  async classifyIntent(_text: string): Promise<IntentResultOutput> { throw new Error(NOT_IMPLEMENTED); },
-  async generateRecommendation(_text: string, _ctx: string): Promise<RecommendationOutput> { throw new Error(NOT_IMPLEMENTED); },
-  async generateReflection(_text: string): Promise<ReflectionResultOutput> { throw new Error(NOT_IMPLEMENTED); },
-  async answerQuestion(_text: string, _ctx: string): Promise<string> { throw new Error(NOT_IMPLEMENTED); },
+  async organizeCapture(): Promise<CaptureResult> { throw new Error(NOT_IMPLEMENTED); },
+  async classifyIntent(): Promise<IntentResultOutput> { throw new Error(NOT_IMPLEMENTED); },
+  async generateRecommendation(): Promise<RecommendationOutput> { throw new Error(NOT_IMPLEMENTED); },
+  async generateReflection(): Promise<ReflectionResultOutput> { throw new Error(NOT_IMPLEMENTED); },
+  async answerQuestion(): Promise<string> { throw new Error(NOT_IMPLEMENTED); },
 };
