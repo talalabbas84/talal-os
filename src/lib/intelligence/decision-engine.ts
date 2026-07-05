@@ -21,22 +21,6 @@ import {
 } from "./action-planner";
 import type { PipelineResult, IntentResult } from "./types";
 
-interface RunOptions {
-  // For CREATE intent — passed from capture-view after user makes inclusion choices.
-  // Not used during the initial process call; used when building final actions to save.
-  inclusion?: {
-    tasks: boolean[];
-    ideas: boolean[];
-    habits: boolean[];
-    projects: boolean[];
-    reminders: boolean[];
-    memories: boolean[];
-    commands: boolean[];
-    journal: boolean;
-  };
-  memoryEdits?: Record<number, { title: string; content: string }>;
-}
-
 // processCapture: main entry — classifies intent then runs the right workflow.
 export async function processCapture(
   userId: string,
@@ -48,7 +32,7 @@ export async function processCapture(
   const intentResult: IntentResult = await routeIntent(text);
 
   // 2. Build full user context (needed by most workflows)
-  const { prompt: contextPrompt, raw: ctx } = await buildUserContext(userId);
+  const { prompt: contextPrompt } = await buildUserContext(userId);
 
   // 3. Route to the appropriate workflow
   switch (intentResult.intent) {

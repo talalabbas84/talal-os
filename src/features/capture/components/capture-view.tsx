@@ -777,7 +777,7 @@ function PlanPreview({
       <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
         <div className="mb-3 flex items-center gap-2">
           <CalendarDays className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Today's Plan</span>
+          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Today&apos;s Plan</span>
         </div>
         <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{plan.suggestion}</p>
 

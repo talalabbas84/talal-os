@@ -1,8 +1,8 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 import type { AIProvider } from "./types";
 
-// The application uses this function exclusively.
+// Lazy require() is intentional — only the active provider is loaded at runtime.
 // Which provider runs is determined solely by AI_PROVIDER.
-// Adding a new provider never requires touching application code.
 export function getAIProvider(): AIProvider {
   const name = (process.env.AI_PROVIDER ?? "mock").toLowerCase();
 
