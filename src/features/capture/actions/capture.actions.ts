@@ -5,6 +5,7 @@ import { auth } from "@/lib/auth";
 import { processCapture as runPipeline } from "@/lib/intelligence/decision-engine";
 import { executeActions } from "@/lib/intelligence/execution-engine";
 import { planFromCapture } from "@/lib/intelligence/action-planner";
+import { planGrowthFromCapture } from "@/lib/intelligence/growth-engine";
 import type { ActionResult } from "@/types";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
 
@@ -77,7 +78,11 @@ export async function saveCreateCapture(
 ): Promise<ActionResult<ExecutionResult>> {
   try {
     const userId = await requireUserId();
-    const actions = planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits);
+    const growthActions = await planGrowthFromCapture(userId, input.capture.articulation.articulated, input.capture.capture);
+    const actions = [
+      ...planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits),
+      ...growthActions,
+    ];
     if (!actions.length) return { success: false, error: "Nothing selected to save." };
 
     const result = await executeActions(userId, actions);
@@ -96,5 +101,6 @@ function revalidateAll() {
   revalidatePath("/projects");
   revalidatePath("/memory");
   revalidatePath("/people");
+  revalidatePath("/capture");
   revalidatePath("/");
 }

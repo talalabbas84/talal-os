@@ -20,6 +20,9 @@ export async function executeActions(
     memoriesSaved: 0,
     remindersCreated: 0,
     followUpsCreated: 0,
+    growthItemsCreated: 0,
+    questionsCreated: 0,
+    questionsAnswered: 0,
     projectsCreated: 0,
     habitsUpdated: 0,
     journalSaved: false,
@@ -134,6 +137,105 @@ export async function executeActions(
           },
         });
         result.followUpsCreated++;
+        break;
+      }
+
+      case "CREATE_GROWTH_ITEM": {
+        const { payload } = action;
+        const existing = await prisma.growthItem.findFirst({
+          where: {
+            userId,
+            category: payload.category,
+            title: { equals: payload.title, mode: "insensitive" },
+          },
+        });
+
+        if (existing) {
+          await prisma.growthItem.update({
+            where: { id: existing.id },
+            data: {
+              description: payload.description ?? existing.description,
+              currentStage: payload.currentStage,
+              lastReviewed: parseDate(payload.lastReviewed) ?? existing.lastReviewed,
+              nextReview: parseDate(payload.nextReview) ?? existing.nextReview,
+              confidence: payload.confidence,
+            },
+          });
+        } else {
+          await prisma.growthItem.create({
+            data: {
+              userId,
+              category: payload.category,
+              title: payload.title,
+              description: payload.description ?? null,
+              currentStage: payload.currentStage,
+              lastReviewed: parseDate(payload.lastReviewed),
+              nextReview: parseDate(payload.nextReview),
+              confidence: payload.confidence,
+              sourceCaptureId: payload.sourceCaptureId ?? null,
+            },
+          });
+          result.growthItemsCreated++;
+        }
+        break;
+      }
+
+      case "CREATE_FOLLOW_UP_QUESTION": {
+        const { payload } = action;
+        const existing = await prisma.followUpQuestion.findFirst({
+          where: {
+            userId,
+            status: "OPEN",
+            question: { equals: payload.question, mode: "insensitive" },
+          },
+        });
+
+        if (!existing) {
+          await prisma.followUpQuestion.create({
+            data: {
+              userId,
+              category: payload.category,
+              question: payload.question,
+              reason: payload.reason ?? null,
+              priority: payload.priority,
+              relatedEntityType: payload.relatedEntityType ?? null,
+              relatedEntityId: payload.relatedEntityId ?? null,
+            },
+          });
+          result.questionsCreated++;
+        }
+        break;
+      }
+
+      case "ANSWER_FOLLOW_UP_QUESTION": {
+        const now = new Date();
+        const question = action.payload.questionId
+          ? await prisma.followUpQuestion.findFirst({
+              where: { id: action.payload.questionId, userId, status: "OPEN" },
+            })
+          : await prisma.followUpQuestion.findFirst({
+              where: { userId, status: "OPEN" },
+              orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+            });
+
+        if (question) {
+          await prisma.followUpQuestion.update({
+            where: { id: question.id },
+            data: { status: "ANSWERED", answeredAt: now },
+          });
+          await prisma.memoryEntry.create({
+            data: {
+              userId,
+              title: `Answer: ${question.question}`,
+              content: action.payload.answer,
+              type: "LESSON_LEARNED",
+              importance: "MEDIUM",
+              source: "CAPTURE",
+            },
+          });
+          result.questionsAnswered++;
+          result.memoriesSaved++;
+        }
         break;
       }
 
@@ -462,4 +564,10 @@ function resolveDate(details: string | null): Date | null {
 
   const parsed = new Date(details);
   return isNaN(parsed.getTime()) ? null : (() => { parsed.setHours(0, 0, 0, 0); return parsed; })();
+}
+
+function parseDate(value: string | null | undefined): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value.includes("T") ? value : `${value}T00:00:00.000Z`);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 }

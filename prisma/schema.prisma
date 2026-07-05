@@ -23,6 +23,8 @@ model User {
   userState         UserState?
   dailyPlans        DailyPlan[]
   followUps         FollowUp[]
+  growthItems       GrowthItem[]
+  followUpQuestions FollowUpQuestion[]
   people            Person[]
   personInteractions PersonInteraction[]
   personMemories    PersonMemory[]
@@ -176,6 +178,51 @@ model FollowUp {
   @@index([status])
   @@index([dueDate])
   @@index([type])
+}
+
+model GrowthItem {
+  id              String          @id @default(cuid())
+  category        GrowthCategory
+  title           String
+  description     String?
+  currentStage    GrowthStage     @default(LEARNED)
+  lastReviewed    DateTime?
+  nextReview      DateTime?
+  confidence      Level           @default(MEDIUM)
+  sourceCaptureId String?
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([currentStage])
+  @@index([nextReview])
+}
+
+model FollowUpQuestion {
+  id                String                 @id @default(cuid())
+  category          GrowthCategory
+  question          String
+  reason            String?
+  priority          Level                  @default(MEDIUM)
+  status            FollowUpQuestionStatus @default(OPEN)
+  relatedEntityType String?
+  relatedEntityId   String?
+  createdAt         DateTime               @default(now())
+  answeredAt        DateTime?
+  updatedAt         DateTime               @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([category])
+  @@index([priority])
+  @@index([status])
+  @@index([relatedEntityType, relatedEntityId])
 }
 
 model Habit {
@@ -408,6 +455,33 @@ enum FollowUpStatus {
   OPEN
   DONE
   SKIPPED
+}
+
+enum GrowthCategory {
+  VOCABULARY
+  DANCE
+  FITNESS
+  HEALTH
+  CAREER
+  RELATIONSHIP
+  COMMUNICATION
+  PUBLIC_SPEAKING
+  READING
+  BUSINESS
+  OTHER
+}
+
+enum GrowthStage {
+  LEARNED
+  PRACTICING
+  REVIEWING
+  MASTERED
+}
+
+enum FollowUpQuestionStatus {
+  OPEN
+  ANSWERED
+  DISMISSED
 }
 
 enum MemoryType {

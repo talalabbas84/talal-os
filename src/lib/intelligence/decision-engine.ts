@@ -21,6 +21,7 @@ import {
   planFromDailyPlan,
   planFromSmartCaptureShortcut,
 } from "./action-planner";
+import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
 import type { PipelineResult, IntentResult } from "./types";
 
 // processCapture: main entry — classifies intent then runs the right workflow.
@@ -36,12 +37,13 @@ export async function processCapture(
     ? planFromSmartCaptureShortcut(articulatedText)
     : [];
   if (shortcutActions.length > 0) {
+    const growthActions = await planGrowthFromText(userId, articulatedText);
     return {
       articulation,
       intent: "UPDATE",
       intentResult: { intent: "UPDATE", confidence: "high", reason: "Smart capture shortcut detected." },
       commands: [],
-      actions: shortcutActions,
+      actions: [...shortcutActions, ...growthActions],
     };
   }
 
@@ -57,23 +59,25 @@ export async function processCapture(
       // User is reporting completion or requesting changes to existing data
       const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const commands = capture.data.commands;
+      const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       return {
         articulation,
         intent: "UPDATE",
         intentResult,
         commands,
-        actions: planFromCommands(commands),
+        actions: [...planFromCommands(commands), ...growthActions],
       };
     }
 
     case "DECISION": {
       const recommendation = await generateRecommendation(articulatedText, contextPrompt);
+      const growthActions = await planGrowthFromText(userId, articulatedText);
       return {
         articulation,
         intent: "DECISION",
         intentResult,
         recommendation,
-        actions: planFromRecommendation(recommendation),
+        actions: [...planFromRecommendation(recommendation), ...growthActions],
       };
     }
 
@@ -90,34 +94,39 @@ export async function processCapture(
         },
         memoryCandidates: reflectionData.memoryCandidates,
       };
+      const growthActions = await planGrowthFromText(userId, articulatedText);
       return {
         articulation,
         intent: intentResult.intent as "REFLECTION" | "JOURNAL",
         intentResult,
         reflectionData: data,
-        actions: planFromReflection(data),
+        actions: [...planFromReflection(data), ...growthActions],
       };
     }
 
     case "QUESTION": {
       const answer = await provider.answerQuestion(articulatedText, contextPrompt);
+      const growthActions = await planGrowthFromText(userId, articulatedText);
       return {
         articulation,
         intent: "QUESTION",
         intentResult,
         answer,
-        actions: [{ id: "noop-1", type: "NO_ACTION", label: "No changes needed", payload: {} }],
+        actions: growthActions.length > 0
+          ? growthActions
+          : [{ id: "noop-1", type: "NO_ACTION", label: "No changes needed", payload: {} }],
       };
     }
 
     case "PLAN": {
       const plan = await runPlanningEngine(userId);
+      const growthActions = await planGrowthFromText(userId, articulatedText);
       return {
         articulation,
         intent: "PLAN",
         intentResult,
         plan,
-        actions: planFromDailyPlan(plan),
+        actions: [...planFromDailyPlan(plan), ...growthActions],
       };
     }
 
@@ -125,12 +134,13 @@ export async function processCapture(
       // Pure memory extraction — no full organize
       const capture = await provider.organizeCapture(articulatedText, contextPrompt);
       const candidates = capture.data.memoryCandidates;
+      const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       return {
         articulation,
         intent: "MEMORY",
         intentResult,
         candidates,
-        actions: planFromMemoryCandidates(candidates),
+        actions: [...planFromMemoryCandidates(candidates), ...growthActions],
       };
     }
 
@@ -155,13 +165,14 @@ export async function processCapture(
         ),
         journal: !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow),
       };
+      const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       return {
         articulation,
         intent: intentResult.intent as "CREATE" | "UNKNOWN",
         intentResult,
         capture,
         // Pre-computed actions from default inclusion — capture-view will recompute on save
-        actions: planFromCapture(capture, defaultInclusion, {}),
+        actions: [...planFromCapture(capture, defaultInclusion, {}), ...growthActions],
       };
     }
   }

@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import type { TaskWithProject } from "@/types";
-import type { FollowUpType } from "@prisma/client";
+import type { FollowUpType, GrowthCategory, Level } from "@prisma/client";
 
 export interface DailyPlan {
   date: Date;
@@ -19,6 +19,7 @@ export interface DailyPlan {
   overdueCount: number;
   suggestion: string;
   followUps: FollowUpSummary[];
+  todaysQuestions: TodayQuestion[];
   inboxCount: number;
   recentReflection: {
     feeling: string | null;
@@ -35,6 +36,14 @@ export interface FollowUpSummary {
   type: FollowUpType;
   dueDate: Date | null;
   reason: string | null;
+}
+
+export interface TodayQuestion {
+  id: string;
+  category: GrowthCategory;
+  question: string;
+  reason: string | null;
+  priority: Level;
 }
 
 interface MorningPlanningOptions {
@@ -58,6 +67,7 @@ export async function buildMorningPlan(
     habits,
     recentCaptures,
     openFollowUps,
+    todaysQuestions,
     personInteractions,
     todayLog,
     recentLog,
@@ -105,6 +115,11 @@ export async function buildMorningPlan(
       },
       orderBy: [{ dueDate: { sort: "asc", nulls: "last" } }, { updatedAt: "desc" }],
       take: 10,
+    }),
+    prisma.followUpQuestion.findMany({
+      where: { userId, status: "OPEN" },
+      orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
+      take: 3,
     }),
     prisma.personInteraction.findMany({
       where: { userId, followUpNeeded: true },
@@ -209,6 +224,13 @@ export async function buildMorningPlan(
       type: followUp.type,
       dueDate: followUp.dueDate,
       reason: followUp.reason,
+    })),
+    todaysQuestions: todaysQuestions.map((question) => ({
+      id: question.id,
+      category: question.category,
+      question: question.question,
+      reason: question.reason,
+      priority: question.priority,
     })),
     inboxCount,
     recentReflection: recentLog

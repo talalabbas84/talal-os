@@ -44,8 +44,11 @@ export const ACTION_TYPES = [
   "CREATE_MEMORY",
   "CREATE_REMINDER",
   "CREATE_FOLLOW_UP",
+  "CREATE_GROWTH_ITEM",
+  "CREATE_FOLLOW_UP_QUESTION",
   "CREATE_PROJECT",
   "CREATE_PERSON_UPDATE",
+  "ANSWER_FOLLOW_UP_QUESTION",
   "COMPLETE_TASK",
   "COMPLETE_TOP_TASK",
   "COMPLETE_HABIT",
@@ -66,8 +69,11 @@ export type PlannedAction =
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
   | { id: string; type: "CREATE_FOLLOW_UP"; label: string; payload: FollowUpPayload }
+  | { id: string; type: "CREATE_GROWTH_ITEM"; label: string; payload: GrowthItemPayload }
+  | { id: string; type: "CREATE_FOLLOW_UP_QUESTION"; label: string; payload: FollowUpQuestionPayload }
   | { id: string; type: "CREATE_PROJECT"; label: string; payload: ProjectPayload }
   | { id: string; type: "CREATE_PERSON_UPDATE"; label: string; payload: PersonUpdatePayload }
+  | { id: string; type: "ANSWER_FOLLOW_UP_QUESTION"; label: string; payload: AnswerFollowUpQuestionPayload }
   | { id: string; type: "COMPLETE_TASK"; label: string; payload: { taskTitle: string } }
   | { id: string; type: "COMPLETE_TOP_TASK"; label: string; payload: Record<string, never> }
   | { id: string; type: "COMPLETE_HABIT"; label: string; payload: { habitName: string } }
@@ -119,6 +125,47 @@ export interface FollowUpPayload {
   dueDate: string | null;
   reason?: string | null;
   createdFrom?: string | null;
+}
+
+export type GrowthCategory =
+  | "VOCABULARY"
+  | "DANCE"
+  | "FITNESS"
+  | "HEALTH"
+  | "CAREER"
+  | "RELATIONSHIP"
+  | "COMMUNICATION"
+  | "PUBLIC_SPEAKING"
+  | "READING"
+  | "BUSINESS"
+  | "OTHER";
+
+export type GrowthStage = "LEARNED" | "PRACTICING" | "REVIEWING" | "MASTERED";
+
+export interface GrowthItemPayload {
+  category: GrowthCategory;
+  title: string;
+  description?: string | null;
+  currentStage: GrowthStage;
+  lastReviewed?: string | null;
+  nextReview?: string | null;
+  confidence: "LOW" | "MEDIUM" | "HIGH";
+  sourceCaptureId?: string | null;
+}
+
+export interface FollowUpQuestionPayload {
+  category: GrowthCategory;
+  question: string;
+  reason?: string | null;
+  priority: "LOW" | "MEDIUM" | "HIGH";
+  relatedEntityType?: string | null;
+  relatedEntityId?: string | null;
+}
+
+export interface AnswerFollowUpQuestionPayload {
+  questionId: string | null;
+  question: string;
+  answer: string;
 }
 
 export interface ProjectPayload {
@@ -277,6 +324,9 @@ export interface ExecutionResult {
   memoriesSaved: number;
   remindersCreated: number;
   followUpsCreated: number;
+  growthItemsCreated: number;
+  questionsCreated: number;
+  questionsAnswered: number;
   projectsCreated: number;
   habitsUpdated: number;
   journalSaved: boolean;

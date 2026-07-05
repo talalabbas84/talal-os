@@ -57,11 +57,11 @@ type ActionInclusion = boolean[];
 
 // ── Root component ────────────────────────────────────────────────────────────
 
-export function CaptureView({ userName }: { userName: string }) {
+export function CaptureView({ userName, initialText = "" }: { userName: string; initialText?: string }) {
   const firstName = userName.split(" ")[0] ?? userName;
 
   const [step, setStep] = useState<Step>("input");
-  const [text, setText] = useState("");
+  const [text, setText] = useState(initialText);
   const [pipelineResult, setPipelineResult] = useState<PipelineResult | null>(null);
   const [createInclusion, setCreateInclusion] = useState<CreateInclusion | null>(null);
   const [memoryEdits, setMemoryEdits] = useState<Record<number, MemoryEdit>>({});
@@ -916,6 +916,9 @@ function SavedView({
     result.ideasCreated > 0 && `${result.ideasCreated} idea${result.ideasCreated !== 1 ? "s" : ""} saved to Inbox`,
     result.remindersCreated > 0 && `${result.remindersCreated} reminder${result.remindersCreated !== 1 ? "s" : ""} added`,
     result.followUpsCreated > 0 && `${result.followUpsCreated} follow-up${result.followUpsCreated !== 1 ? "s" : ""} created`,
+    result.growthItemsCreated > 0 && `${result.growthItemsCreated} growth item${result.growthItemsCreated !== 1 ? "s" : ""} created`,
+    result.questionsCreated > 0 && `${result.questionsCreated} question${result.questionsCreated !== 1 ? "s" : ""} queued`,
+    result.questionsAnswered > 0 && `${result.questionsAnswered} question${result.questionsAnswered !== 1 ? "s" : ""} answered`,
     result.journalSaved && "Daily log updated",
     result.habitsUpdated > 0 && `${result.habitsUpdated} habit${result.habitsUpdated !== 1 ? "s" : ""} recorded`,
     result.projectsCreated > 0 && `${result.projectsCreated} project${result.projectsCreated !== 1 ? "s" : ""} created`,

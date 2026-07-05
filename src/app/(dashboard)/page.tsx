@@ -5,6 +5,7 @@ import {
   BookOpen,
   Brain,
   CheckCircle2,
+  HelpCircle,
   Inbox,
   MessageCircle,
   Moon,
@@ -101,6 +102,42 @@ export default async function DashboardPage() {
                 {plan.todayMission}
               </p>
               <p className="mt-3 text-sm text-neutral-500">{plan.suggestion}</p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between pb-3">
+              <CardTitle className="flex items-center gap-2 text-sm font-medium text-neutral-500">
+                <HelpCircle className="h-4 w-4" />
+                Today&apos;s Questions
+              </CardTitle>
+              <span className="text-xs text-neutral-400">max 3</span>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {plan.todaysQuestions.length === 0 ? (
+                <EmptyLine text="No follow-up questions today." />
+              ) : (
+                plan.todaysQuestions.map((question) => (
+                  <div key={question.id} className="rounded-xl border border-neutral-100 p-3 dark:border-neutral-800">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-medium leading-6 text-neutral-900 dark:text-neutral-50">
+                          {question.question}
+                        </p>
+                        {question.reason && (
+                          <p className="mt-1 text-xs leading-5 text-neutral-500">{question.reason}</p>
+                        )}
+                      </div>
+                      <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium text-neutral-500 dark:bg-neutral-800">
+                        {formatCategory(question.category)}
+                      </span>
+                    </div>
+                    <Button asChild variant="outline" size="sm" className="mt-3 w-full">
+                      <Link href={`/capture?question=${question.id}`}>Answer in Capture</Link>
+                    </Button>
+                  </div>
+                ))
+              )}
             </CardContent>
           </Card>
 
@@ -261,6 +298,10 @@ function ReflectionReminder() {
 
 function EmptyLine({ text }: { text: string }) {
   return <p className="py-3 text-center text-sm text-neutral-400">{text}</p>;
+}
+
+function formatCategory(category: string): string {
+  return category.toLowerCase().replace(/_/g, " ");
 }
 
 function getHourInTimeZone(timeZone: string): number {
