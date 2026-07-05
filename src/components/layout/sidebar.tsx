@@ -29,6 +29,15 @@ const navItems = [
   { href: "/habits", label: "Habits", icon: Repeat2 },
 ];
 
+// Only show these 5 on the mobile bottom bar (all 9 are in the desktop sidebar)
+const mobileNavItems = [
+  { href: "/capture", label: "Capture", icon: Sparkles },
+  { href: "/", label: "Home", icon: LayoutDashboard },
+  { href: "/tasks", label: "Tasks", icon: CheckSquare },
+  { href: "/people", label: "People", icon: Users },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
+];
+
 export function Sidebar() {
   const pathname = usePathname();
 
@@ -74,9 +83,9 @@ export function Sidebar() {
         </div>
       </aside>
 
-      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white/95 px-2 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95 md:hidden">
-        <div className="grid grid-cols-9 gap-1">
-          {navItems.map(({ href, label, icon: Icon }) => {
+      <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-neutral-200 bg-white/95 px-4 pb-[calc(env(safe-area-inset-bottom)+0.5rem)] pt-2 shadow-lg backdrop-blur dark:border-neutral-800 dark:bg-neutral-950/95 md:hidden">
+        <div className="grid grid-cols-5 gap-1">
+          {mobileNavItems.map(({ href, label, icon: Icon }) => {
             const active =
               href === "/" ? pathname === "/" : pathname.startsWith(href);
             return (
@@ -84,14 +93,14 @@ export function Sidebar() {
                 key={href}
                 href={href}
                 className={cn(
-                  "flex min-w-0 flex-col items-center justify-center gap-1 rounded-xl px-1 py-2 text-[10px] font-medium transition-colors",
+                  "flex flex-col items-center justify-center gap-1 rounded-xl px-2 py-2 text-[10px] font-medium transition-colors",
                   active
                     ? "bg-neutral-100 text-neutral-950 dark:bg-neutral-800 dark:text-neutral-50"
                     : "text-neutral-500 dark:text-neutral-400",
                 )}
               >
                 <Icon className="h-5 w-5 shrink-0" />
-                <span className="max-w-full truncate">{label}</span>
+                <span>{label}</span>
               </Link>
             );
           })}
