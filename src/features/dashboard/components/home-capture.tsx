@@ -7,11 +7,23 @@ import { saveDraft } from "@/features/capture/actions/draft.actions";
 import { cn } from "@/utils/cn";
 
 const MODE_PLACEHOLDERS: Record<string, string> = {
+  // Legacy HomeMode values
   focus: "Capture distracting thoughts here — keep them out of your head.",
   preparation: "Any last thoughts before you go?",
   reflection: "How did today go? What's on your mind?",
   recovery: "How are you feeling? What do you need?",
   morning: "What do you want to accomplish today?",
+  // LifeStateType values
+  FOCUS: "Capture distracting thoughts here — keep them out of your head.",
+  BREAK: "What's on your mind during the break?",
+  PREPARATION: "Any last thoughts before you go?",
+  ACTIVE_EVENT: "Quick capture — don't let it pull you away.",
+  REFLECTION: "How did today go? What are you taking away?",
+  LEARNING: "Write to remember. What stood out?",
+  RECOVERY: "How are you feeling? What do you need?",
+  MORNING: "What do you want to accomplish today?",
+  SOCIAL: "Something to remember about this time.",
+  CEO_REVIEW: "What needs to change at the system level?",
 };
 
 export function HomeCapture({ mode }: { mode?: string }) {

@@ -23,7 +23,11 @@ export type SectionId =
   | "one_question"       // single reflection/growth question
   | "reflection_prompt"  // evening "How was your day?" card
   | "life_feed"          // chronological LifeTimeline + ActivityLogs
-  | "recovery_guide";    // recovery mode recommendations
+  | "recovery_guide"     // recovery mode recommendations
+  | "break_guide"        // post-focus break suggestions
+  | "learning_review"    // learning session: due items + review CTA
+  | "social_guide"       // social event tips and presence reminders
+  | "ceo_review";        // system-level review: projects, habits, weekly context
 
 // ── Home Context ──────────────────────────────────────────────────────────────
 // All signals the engine uses to make decisions.

@@ -56,19 +56,23 @@ model User {
   lifeTimeline      LifeTimelineEntry[]
   followUpQueue     FollowUpQueue[]
   readinessPlans    ReadinessPlan[]
+  lifeStateHistory  LifeStateRecord[]
 }
 
 model UserState {
-  id             String    @id @default(cuid())
-  currentMood    String?
-  energyLevel    Level?
-  focusLevel     Level?
-  recoveryMode   Boolean   @default(false)
-  currentMission String?
-  weekFocus      String?
-  lastReflection DateTime?
-  lastPlanning   DateTime?
-  updatedAt      DateTime  @updatedAt
+  id                 String        @id @default(cuid())
+  currentMood        String?
+  energyLevel        Level?
+  focusLevel         Level?
+  recoveryMode       Boolean       @default(false)
+  currentMission     String?
+  weekFocus          String?
+  lastReflection     DateTime?
+  lastPlanning       DateTime?
+  currentLifeState   LifeStateType @default(DEFAULT)
+  lifeStateEnteredAt DateTime      @default(now())
+  lifeStateContext   Json?
+  updatedAt          DateTime      @updatedAt
 
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1343,4 +1347,35 @@ enum MemorySource {
   MANUAL
   WEEKLY_REVIEW
   AI_REFLECTION
+}
+
+// ── Life State Engine ─────────────────────────────────────────────────────────
+
+model LifeStateRecord {
+  id          String        @id @default(cuid())
+  state       LifeStateType
+  enteredAt   DateTime      @default(now())
+  exitedAt    DateTime?
+  triggeredBy String?       // "auto" | "capture" | "event" | "manual"
+  context     Json?
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, enteredAt])
+  @@index([userId, state])
+}
+
+enum LifeStateType {
+  DEFAULT
+  MORNING
+  FOCUS
+  BREAK
+  PREPARATION
+  ACTIVE_EVENT
+  REFLECTION
+  LEARNING
+  RECOVERY
+  SOCIAL
+  CEO_REVIEW
 }

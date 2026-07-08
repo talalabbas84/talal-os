@@ -4,19 +4,23 @@ import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 import { getTemporalContext } from "@/lib/context/temporal-context";
-import { buildHomeContext, buildHomeLayout } from "@/lib/home/adaptive-home-engine";
+import { getActiveLifeState, getStateLayout, LIFE_STATE_LABELS } from "@/lib/life-state/life-state-engine";
 import { HomeCapture } from "@/features/dashboard/components/home-capture";
 import { RightNowCard } from "@/features/dashboard/components/right-now-card";
 import { TodaysSchedule } from "@/features/dashboard/components/todays-schedule";
 import { ReflectionCard } from "@/features/dashboard/components/reflection-card";
 import { RecoveryGuide } from "@/features/dashboard/components/recovery-guide";
+import { BreakGuide } from "@/features/dashboard/components/break-guide";
+import { LearningReview } from "@/features/dashboard/components/learning-review";
+import { SocialGuide } from "@/features/dashboard/components/social-guide";
+import { CeoReview } from "@/features/dashboard/components/ceo-review";
 import { getReadinessForDashboard } from "@/lib/readiness/readiness-engine";
 import { ReadinessCard } from "@/features/readiness/components/readiness-card";
 import type { DailyPlan, ActivityLogSummary } from "@/lib/intelligence/morning-planning-engine";
 import type { UserState, EventPlaceholder, LifeTimelineEntry } from "@prisma/client";
 import type { RightNowItem } from "@/features/dashboard/components/right-now-card";
 import type { ReadinessPlanData } from "@/lib/readiness/readiness-types";
-import type { SectionId, HomeMode } from "@/lib/home/home-types";
+import type { SectionId } from "@/lib/home/home-types";
 
 export default async function DashboardPage() {
   const session = await auth();
@@ -25,6 +29,7 @@ export default async function DashboardPage() {
   const userId = session.user.id;
   const firstName = session.user.name?.split(" ")[0] ?? "Talal";
   const temporal = getTemporalContext("America/Toronto");
+  const now = temporal.now;
   const today = temporal.todayMidnight;
 
   const [plan, userState, nextEvents, lifeTimeline, oneQuestion, readinessPlans] = await Promise.all([
@@ -47,8 +52,54 @@ export default async function DashboardPage() {
     getReadinessForDashboard(userId, 3).catch(() => [] as ReadinessPlanData[]),
   ]);
 
-  // ── Derived data ────────────────────────────────────────────────────────────
+  // ── Derived signals ─────────────────────────────────────────────────────────
   const hour = parseInt(temporal.localTime.split(":")[0] ?? "12", 10);
+  const isWeekend = temporal.dayOfWeek === "Saturday" || temporal.dayOfWeek === "Sunday";
+
+  const lastActivity = plan.currentActivity;
+  const lastActivityAge = lastActivity
+    ? (now.getTime() - lastActivity.createdAt.getTime()) / 60_000
+    : null;
+  const isInFocusSession =
+    !!lastActivity &&
+    (lastActivity.category === "WORK" || lastActivity.category === "TALAL_OS") &&
+    (lastActivityAge ?? 999) < 30;
+
+  // Upcoming event: use readiness plans (have full datetime)
+  const soonestPlan = readinessPlans[0] ?? null;
+  const nextEventHoursAway = soonestPlan
+    ? (soonestPlan.scheduledFor.getTime() - now.getTime()) / 3_600_000
+    : null;
+  const hasUpcomingEventSoon =
+    nextEventHoursAway !== null && nextEventHoursAway >= 0 && nextEventHoursAway <= 3;
+
+  // Active event: started within the last 2 hours
+  const activePlan = readinessPlans.find((rp) => {
+    const msSinceStart = now.getTime() - rp.scheduledFor.getTime();
+    return msSinceStart >= 0 && msSinceStart < 2 * 3_600_000;
+  }) ?? null;
+  const hasActiveEvent = !!activePlan;
+
+  // ── Life State Engine ───────────────────────────────────────────────────────
+  const lifeState = await getActiveLifeState(userId, {
+    now,
+    hour,
+    isoDate: temporal.isoDate,
+    isWeekend,
+    recoveryMode: plan.recoveryMode,
+    isInFocusSession,
+    currentActivityCategory: lastActivity?.category ?? null,
+    currentActivityTitle: lastActivity?.activity ?? null,
+    lastActivityAge,
+    hasUpcomingEventSoon,
+    hasActiveEvent,
+    activeEventTitle: activePlan?.title ?? null,
+    nextEventTitle: soonestPlan?.title ?? nextEvents[0]?.title ?? null,
+    nextEventHoursAway,
+    hasDueLearning: plan.dueLearningItems.length > 0,
+  });
+
+  // ── Derived content ─────────────────────────────────────────────────────────
   const contextChips = buildContextChips(plan, userState, nextEvents, temporal.isoDate);
   const question = oneQuestion ?? (plan.todaysQuestions[0] ? {
     id: plan.todaysQuestions[0].id,
@@ -57,21 +108,23 @@ export default async function DashboardPage() {
     status: "OPEN" as const,
   } : null);
   const rightNow = buildRightNow(plan);
-  const greeting = buildGreeting(firstName, hour, plan, nextEvents);
+  const greeting = buildGreeting(firstName, hour, plan, lifeState, nextEvents);
   const lifeFeed = buildLifeFeed(lifeTimeline, plan.todayActivityLogs);
 
-  // ── Adaptive engine ─────────────────────────────────────────────────────────
-  const homeCtx = buildHomeContext({
-    plan,
-    userState,
-    nextEvents,
-    lifeTimeline,
-    readinessPlans,
-    temporal: { ...temporal, hour },
+  const hasTodayEvents = nextEvents.some(
+    (ev) => ev.date.toISOString().split("T")[0] === temporal.isoDate,
+  );
+
+  // ── Section layout (Life State Router) ──────────────────────────────────────
+  const sections = getStateLayout(lifeState, {
+    hasTopTask: !!rightNow,
+    hasReadinessPlans: readinessPlans.length > 0,
     hasQuestion: !!question,
+    hasLifeFeed: lifeFeed.length > 0,
+    hasTodayEvents,
     hasContextChips: contextChips.length > 0,
+    hasDueLearning: plan.dueLearningItems.length > 0,
   });
-  const layout = buildHomeLayout(homeCtx);
 
   // ── Section JSX map ─────────────────────────────────────────────────────────
   const sectionJSX: Record<SectionId, React.ReactNode> = {
@@ -110,14 +163,14 @@ export default async function DashboardPage() {
 
     capture: (
       <section key="capture">
-        <HomeCapture mode={layout.mode} />
+        <HomeCapture mode={lifeState} />
       </section>
     ),
 
     right_now: rightNow ? (
       <section key="right_now">
         <p className="mb-4 text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">
-          {layout.mode === "focus" ? "Focus" : "Right Now"}
+          {lifeState === "FOCUS" ? "Focus" : "Right Now"}
         </p>
         <RightNowCard item={rightNow} />
       </section>
@@ -130,7 +183,7 @@ export default async function DashboardPage() {
         </p>
         <div className="space-y-3">
           {readinessPlans.map((rp) => (
-            <ReadinessCard key={rp.id} plan={rp} now={temporal.now} />
+            <ReadinessCard key={rp.id} plan={rp} now={now} />
           ))}
         </div>
       </section>
@@ -194,11 +247,27 @@ export default async function DashboardPage() {
     recovery_guide: (
       <RecoveryGuide key="recovery_guide" plan={plan} />
     ),
+
+    break_guide: (
+      <BreakGuide key="break_guide" />
+    ),
+
+    learning_review: (
+      <LearningReview key="learning_review" plan={plan} />
+    ),
+
+    social_guide: (
+      <SocialGuide key="social_guide" nextEvent={nextEvents[0] ?? null} />
+    ),
+
+    ceo_review: (
+      <CeoReview key="ceo_review" plan={plan} />
+    ),
   };
 
   return (
     <div className="mx-auto max-w-2xl space-y-12 px-4 pb-24 pt-8 sm:pt-14">
-      {layout.sections.map((id) => sectionJSX[id])}
+      {sections.map((id) => sectionJSX[id])}
     </div>
   );
 }
@@ -209,6 +278,7 @@ function buildGreeting(
   firstName: string,
   hour: number,
   plan: DailyPlan,
+  lifeState: string,
   nextEvents: EventPlaceholder[],
 ): { headline: string; subline: string; note?: string } {
   const timeGreeting =
@@ -217,7 +287,7 @@ function buildGreeting(
     hour < 17 ? "Good afternoon," :
     hour < 21 ? "Good evening," : "Good night,";
 
-  if (plan.recoveryMode) {
+  if (lifeState === "RECOVERY") {
     return {
       headline: `${timeGreeting} ${firstName}.`,
       subline: "Take care of yourself first.",
@@ -225,23 +295,57 @@ function buildGreeting(
     };
   }
 
-  // Focus session in progress
-  const lastActivity = plan.currentActivity;
-  if (
-    lastActivity &&
-    (lastActivity.category === "WORK" || lastActivity.category === "TALAL_OS") &&
-    (new Date().getTime() - lastActivity.createdAt.getTime()) / 60_000 < 30
-  ) {
+  if (lifeState === "BREAK") {
     return {
       headline: `${timeGreeting} ${firstName}.`,
-      subline: `You're in a session: ${lastActivity.activity.toLowerCase()}.`,
+      subline: "Good session. Take a proper break.",
+    };
+  }
+
+  if (lifeState === "ACTIVE_EVENT") {
+    const event = nextEvents[0];
+    return {
+      headline: `${timeGreeting} ${firstName}.`,
+      subline: event ? `You're in: ${event.title}.` : "You're in an event.",
+      note: "Capture anything important after.",
+    };
+  }
+
+  if (lifeState === "SOCIAL") {
+    return {
+      headline: `${timeGreeting} ${firstName}.`,
+      subline: "Social time. Be fully present.",
+    };
+  }
+
+  if (lifeState === "LEARNING") {
+    return {
+      headline: `${timeGreeting} ${firstName}.`,
+      subline: "Learning session. Make it count.",
+    };
+  }
+
+  if (lifeState === "CEO_REVIEW") {
+    return {
+      headline: `${timeGreeting} ${firstName}.`,
+      subline: "Time to review the bigger picture.",
+    };
+  }
+
+  if (lifeState === "FOCUS") {
+    const lastActivity = plan.currentActivity;
+    return {
+      headline: `${timeGreeting} ${firstName}.`,
+      subline: lastActivity
+        ? `You're in a session: ${lastActivity.activity.toLowerCase()}.`
+        : "You're in a focus session.",
       note: plan.topTasks[0] ? `Continue: ${plan.topTasks[0].title}.` : "Keep going.",
     };
   }
 
-  // Upcoming event soon
+  // PREPARATION, REFLECTION, MORNING, DEFAULT
   const soonEvent = nextEvents[0];
-  if (soonEvent) {
+  if (soonEvent && lifeState === "PREPARATION") {
     const label = soonEvent.time ? `${soonEvent.title} at ${soonEvent.time}` : soonEvent.title;
     return {
       headline: `${timeGreeting} ${firstName}.`,
@@ -250,7 +354,6 @@ function buildGreeting(
     };
   }
 
-  // Reference what happened recently
   if (plan.recentReflection?.accomplished && hour < 14) {
     return {
       headline: `${timeGreeting} ${firstName}.`,
@@ -402,3 +505,6 @@ function formatTime(date: Date): string {
 function truncate(s: string, n: number): string {
   return s.length > n ? s.slice(0, n - 1) + "…" : s;
 }
+
+// Keep LIFE_STATE_LABELS imported to avoid dead-import warning (used for future API)
+void LIFE_STATE_LABELS;
