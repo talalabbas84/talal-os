@@ -77,6 +77,7 @@ For each event:
 - description: useful context, e.g. "After dance class"
 - date: YYYY-MM-DD when mentioned or safely resolved
 - time: HH:MM when mentioned, otherwise null
+- timeContext: natural context such as "after dance class", otherwise null
 - location: explicit location only, otherwise null
 - relatedPersonName: person name if the event is with someone, otherwise null
 - needsReminder: true for future dated/time-specific plans
@@ -214,6 +215,7 @@ JSON structure:
         "description": "string",
         "date": "YYYY-MM-DD or null",
         "time": "HH:MM or null",
+        "timeContext": "string or null",
         "location": "string or null",
         "relatedPersonName": "string or null",
         "needsReminder": true,

@@ -481,6 +481,7 @@ model EventPlaceholder {
   description     String?
   date            DateTime @db.Date
   time            String?
+  timeContext     String?
   location        String?
   sourceCaptureId String?
   needsReminder   Boolean  @default(true)

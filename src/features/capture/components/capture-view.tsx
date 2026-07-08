@@ -845,7 +845,8 @@ function PersonPlanCard({
 function EventPlaceholderCard({ event }: { event: EventPlaceholderOutput }) {
   const details = [
     event.date && formatDate(event.date),
-    event.time,
+    event.time && formatTime(event.time),
+    event.timeContext,
     event.location,
     event.relatedPersonName && `with ${event.relatedPersonName}`,
     event.needsReminder && "reminder on",
@@ -1239,4 +1240,13 @@ function formatDate(iso: string): string {
   if (d.toDateString() === today.toDateString()) return "today";
   if (d.toDateString() === tomorrow.toDateString()) return "tomorrow";
   return d.toLocaleDateString("en-CA", { month: "short", day: "numeric" });
+}
+
+function formatTime(time: string): string {
+  const [hourValue, minute = "00"] = time.split(":");
+  const hour = Number(hourValue);
+  if (Number.isNaN(hour)) return time;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${suffix}`;
 }

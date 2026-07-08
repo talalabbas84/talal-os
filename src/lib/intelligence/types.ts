@@ -171,6 +171,7 @@ export interface EventPlaceholderPayload {
   description?: string | null;
   date: string;
   time?: string | null;
+  timeContext?: string | null;
   location?: string | null;
   relatedPersonName?: string | null;
   sourceCaptureId?: string | null;

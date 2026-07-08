@@ -97,6 +97,7 @@ export function planFromCapture(
       description: event.description || null,
       date: event.date,
       time: event.time,
+      timeContext: event.timeContext,
       location: event.location,
       relatedPersonName: event.relatedPersonName,
       needsReminder: event.needsReminder,

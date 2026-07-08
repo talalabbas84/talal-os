@@ -339,11 +339,17 @@ function extractEventPlaceholders(text: string): EventPlaceholderOutput[] {
     description: /\bafter\b/i.test(text) ? "Includes after-context from capture." : "",
     date: timeInfo.dueDate,
     time,
+    timeContext: timeInfo.timeContext ?? extractAfterContext(text),
     location: null,
     relatedPersonName,
     needsReminder: true,
     confidence: "high",
   }];
+}
+
+function extractAfterContext(text: string): string | null {
+  const after = text.match(/\bafter\s+(?:my\s+)?([^,.!?]+?)(?:\s+at\s+|\s+around\s+|[,.!?]|$)/i)?.[1]?.trim();
+  return after ? `after ${after}` : null;
 }
 
 function extractTasks(text: string): TaskOutput[] {

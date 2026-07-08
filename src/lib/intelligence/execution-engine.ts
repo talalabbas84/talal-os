@@ -163,6 +163,7 @@ export async function executeActions(
             description: payload.description ?? null,
             date: new Date(`${payload.date}T00:00:00.000Z`),
             time: payload.time ?? null,
+            timeContext: payload.timeContext ?? null,
             location: payload.location ?? null,
             relatedPersonId,
             sourceCaptureId: payload.sourceCaptureId ?? null,

@@ -68,12 +68,14 @@ function inferEventPlaceholders(source: string): EventPlaceholderOutput[] {
   const kind = extractEventKind(source);
   const title = personName && kind ? `${kind} with ${personName}` : kind ?? "Planned event";
   const afterContext = source.match(/\bafter\s+(?:my\s+)?([^,.!?]+?)(?:\s+at\s+|\s+around\s+|[,.!?]|$)/i)?.[1]?.trim();
+  const timeContext = afterContext ? `after ${afterContext}` : null;
 
   return [{
     title,
-    description: afterContext ? `After ${afterContext}.` : "",
+    description: buildEventDescription(kind, personName, afterContext, time),
     date,
     time,
+    timeContext,
     location: null,
     relatedPersonName: personName,
     needsReminder: true,
@@ -96,9 +98,9 @@ function inferPeopleUpdates(source: string, events: EventPlaceholderOutput[]): P
         interaction: {
           date: event.date,
           location: event.location,
-          summary: `Planned ${event.title}${event.date ? ` on ${event.date}` : ""}${event.time ? ` at ${event.time}` : ""}.`,
+          summary: buildInteractionSummary(event),
           topics: [event.title],
-          context: "planned_interaction",
+          context: event.timeContext ?? "planned_interaction",
           sentiment: null,
           followUpNeeded: true,
           followUpDate: event.date,
@@ -118,17 +120,33 @@ function inferReminders(events: EventPlaceholderOutput[]): ReminderOutput[] {
   return events
     .filter((event) => event.needsReminder)
     .map((event) => ({
-      title: event.title,
+      title: `Remind me: ${event.title}`,
       when: [event.date, event.time].filter(Boolean).join(" ") || null,
       confidence: "high",
     }));
 }
 
 function mergeEvents(existing: EventPlaceholderOutput[], inferred: EventPlaceholderOutput[]): EventPlaceholderOutput[] {
-  const additions = inferred.filter((event) =>
-    !existing.some((current) => sameText(current.title, event.title) && current.date === event.date),
-  );
-  return additions.length ? [...existing, ...additions] : existing;
+  const next = [...existing];
+  let changed = false;
+
+  for (const event of inferred) {
+    const matchIndex = next.findIndex((current) => shouldMergeEvent(current, event));
+    if (matchIndex === -1) {
+      next.push(event);
+      changed = true;
+      continue;
+    }
+
+    const current = next[matchIndex]!;
+    const merged = mergeEvent(current, event);
+    if (JSON.stringify(current) !== JSON.stringify(merged)) {
+      next[matchIndex] = merged;
+      changed = true;
+    }
+  }
+
+  return changed ? next : existing;
 }
 
 function mergePeopleUpdates(existing: PersonUpdateOutput[], inferred: PersonUpdateOutput[]): PersonUpdateOutput[] {
@@ -157,10 +175,38 @@ function mergePeopleUpdates(existing: PersonUpdateOutput[], inferred: PersonUpda
 }
 
 function mergeReminders(existing: ReminderOutput[], inferred: ReminderOutput[]): ReminderOutput[] {
-  const additions = inferred.filter((reminder) =>
-    !existing.some((current) => sameText(current.title, reminder.title)),
-  );
-  return additions.length ? [...existing, ...additions] : existing;
+  const next = [...existing];
+  let changed = false;
+
+  for (const reminder of inferred) {
+    const normalizedTitle = reminder.title.replace(/^Remind me:\s*/i, "");
+    const index = next.findIndex((current) =>
+      sameText(current.title, reminder.title) ||
+      sameText(current.title, normalizedTitle) ||
+      sameText(current.title.replace(/^Remind me:\s*/i, ""), normalizedTitle) ||
+      (isGenericTitle(current.title.replace(/^Remind me:\s*/i, "")) && sameEventKind(current.title, normalizedTitle)),
+    );
+
+    if (index === -1) {
+      next.push(reminder);
+      changed = true;
+      continue;
+    }
+
+    const current = next[index]!;
+    const merged = {
+      ...current,
+      title: isGenericTitle(current.title) ? reminder.title : current.title,
+      when: current.when ?? reminder.when,
+      confidence: current.confidence === "low" ? reminder.confidence : current.confidence,
+    };
+    if (JSON.stringify(current) !== JSON.stringify(merged)) {
+      next[index] = merged;
+      changed = true;
+    }
+  }
+
+  return changed ? next : existing;
 }
 
 function enrichSummary(
@@ -191,6 +237,72 @@ function extractEventKind(source: string): string | null {
   if (/\bdate\b/i.test(source)) return "Date";
   if (/\bplan\b/i.test(source)) return "Plan";
   return null;
+}
+
+function buildEventDescription(
+  kind: string | null,
+  personName: string | null,
+  afterContext: string | undefined,
+  time: string | null,
+): string {
+  const subject = [kind ?? "Plan", personName && `with ${personName}`].filter(Boolean).join(" ");
+  const context = afterContext ? ` after ${afterContext}` : "";
+  const timePhrase = time ? `, around ${formatDisplayTime(time)}` : "";
+  return `${subject}${context}${timePhrase}.`;
+}
+
+function buildInteractionSummary(event: EventPlaceholderOutput): string {
+  const context = event.timeContext ? ` ${event.timeContext}` : "";
+  const time = event.time ? ` around ${formatDisplayTime(event.time)}` : "";
+  return `${event.title} planned for ${event.date}${context}${time}.`;
+}
+
+function shouldMergeEvent(current: EventPlaceholderOutput, inferred: EventPlaceholderOutput): boolean {
+  if (current.date && inferred.date && current.date !== inferred.date) return false;
+  if (sameText(current.title, inferred.title)) return true;
+  if (isGenericTitle(current.title) && sameEventKind(current.title, inferred.title)) return true;
+  if (current.relatedPersonName && inferred.relatedPersonName && sameText(current.relatedPersonName, inferred.relatedPersonName)) {
+    return sameEventKind(current.title, inferred.title);
+  }
+  return false;
+}
+
+function mergeEvent(current: EventPlaceholderOutput, inferred: EventPlaceholderOutput): EventPlaceholderOutput {
+  const title = shouldUpgradeTitle(current, inferred) ? inferred.title : current.title;
+  return {
+    ...current,
+    title,
+    description: chooseRicherText(current.description, inferred.description),
+    date: current.date ?? inferred.date,
+    time: current.time ?? inferred.time,
+    timeContext: current.timeContext ?? inferred.timeContext,
+    location: current.location ?? inferred.location,
+    relatedPersonName: current.relatedPersonName ?? inferred.relatedPersonName,
+    needsReminder: current.needsReminder || inferred.needsReminder,
+    confidence: current.confidence === "low" ? inferred.confidence : current.confidence,
+  };
+}
+
+function shouldUpgradeTitle(current: EventPlaceholderOutput, inferred: EventPlaceholderOutput): boolean {
+  if (!current.relatedPersonName && inferred.relatedPersonName) return true;
+  if (isGenericTitle(current.title) && !isGenericTitle(inferred.title)) return true;
+  return inferred.title.length > current.title.length && sameEventKind(current.title, inferred.title);
+}
+
+function chooseRicherText(current: string | null | undefined, inferred: string | null | undefined): string {
+  const a = current ?? "";
+  const b = inferred ?? "";
+  return b.length > a.length ? b : a;
+}
+
+function sameEventKind(a: string, b: string): boolean {
+  const kindA = extractEventKind(a)?.toLowerCase();
+  const kindB = extractEventKind(b)?.toLowerCase();
+  return !!kindA && kindA === kindB;
+}
+
+function isGenericTitle(title: string): boolean {
+  return /^(dinner|lunch|coffee|meeting|call|appointment|date|plan|class|dance class)$/i.test(title.trim());
 }
 
 function extractPersonName(source: string): string | null {
@@ -244,6 +356,15 @@ function extractTime(source: string): string | null {
   if (!suffix && hour >= 1 && hour <= 7 && /\b(dinner|evening|night|after.+dance)\b/i.test(source)) hour += 12;
 
   return `${hour.toString().padStart(2, "0")}:${minute}`;
+}
+
+function formatDisplayTime(time: string): string {
+  const [rawHour, minute = "00"] = time.split(":");
+  const hour = Number(rawHour);
+  if (Number.isNaN(hour)) return time;
+  const suffix = hour >= 12 ? "PM" : "AM";
+  const displayHour = hour % 12 || 12;
+  return `${displayHour}:${minute} ${suffix}`;
 }
 
 function normalizeSource(value: string): string {

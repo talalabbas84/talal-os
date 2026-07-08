@@ -89,6 +89,7 @@ export const eventPlaceholderOutputSchema = z.object({
   description: z.string().default(""),
   date: z.string().nullable().default(null),
   time: z.string().nullable().default(null),
+  timeContext: z.string().nullable().default(null),
   location: z.string().nullable().default(null),
   relatedPersonName: z.string().nullable().default(null),
   needsReminder: z.boolean().default(true),

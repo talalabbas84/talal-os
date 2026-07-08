@@ -104,6 +104,18 @@ function heuristicUnderstanding(input: string): UnderstandingOutput {
 
 function structureKnownCapture(input: string): string {
   const lower = input.toLowerCase();
+  const dinnerPlan = input.match(
+    /\bdinner\s+plan\b.*\b(this\s+[a-z]+|next\s+[a-z]+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*\bwith\s+([a-z]+)\b.*\bafter\s+(?:my\s+)?dance class\b.*\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i,
+  );
+
+  if (dinnerPlan?.[1] && dinnerPlan[2] && dinnerPlan[3]) {
+    const day = dinnerPlan[1];
+    const name = capitalizeWord(dinnerPlan[2]);
+    const minute = dinnerPlan[4] ?? "00";
+    const suffix = dinnerPlan[5]?.toUpperCase() ?? "PM";
+    return `Dinner with ${name} ${day} after dance around ${dinnerPlan[3]}:${minute} ${suffix}.`;
+  }
+
   const dinnerDance = input.match(
     /\b(?:i\s+)?(?:have to|need to|will|am going to|i'm going to)?\s*(?:go\s+)?(?:for\s+)?(?:a\s+)?dinner with ([a-z]+).*dance class.*\b(this\s+[a-z]+|next\s+[a-z]+|monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b.*ends? at\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/i,
   );
