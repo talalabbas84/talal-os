@@ -5,6 +5,9 @@ import { prisma } from "@/lib/prisma";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 import { getTemporalContext } from "@/lib/context/temporal-context";
 import { getActiveLifeState, getStateLayout, LIFE_STATE_LABELS } from "@/lib/life-state/life-state-engine";
+import { runContextWindowEngine } from "@/lib/context-windows/context-window-engine";
+import { NowFlow } from "@/features/dashboard/components/now-flow";
+import type { ContextWindowData } from "@/lib/context-windows/context-window-engine";
 import { HomeCapture } from "@/features/dashboard/components/home-capture";
 import { RightNowCard } from "@/features/dashboard/components/right-now-card";
 import { TodaysSchedule } from "@/features/dashboard/components/todays-schedule";
@@ -32,25 +35,27 @@ export default async function DashboardPage() {
   const now = temporal.now;
   const today = temporal.todayMidnight;
 
-  const [plan, userState, nextEvents, lifeTimeline, oneQuestion, readinessPlans] = await Promise.all([
-    buildDailyPlan(userId),
-    prisma.userState.findUnique({ where: { userId } }),
-    prisma.eventPlaceholder.findMany({
-      where: { userId, date: { gte: today } },
-      orderBy: { date: "asc" },
-      take: 5,
-    }),
-    prisma.lifeTimelineEntry.findMany({
-      where: { userId, occurredAt: { gte: today } },
-      orderBy: { occurredAt: "asc" },
-      take: 12,
-    }),
-    prisma.reflectionQuestion.findFirst({
-      where: { userId, status: "OPEN" },
-      orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
-    }),
-    getReadinessForDashboard(userId, 3).catch(() => [] as ReadinessPlanData[]),
-  ]);
+  const [plan, userState, nextEvents, lifeTimeline, oneQuestion, readinessPlans, contextWindow] =
+    await Promise.all([
+      buildDailyPlan(userId),
+      prisma.userState.findUnique({ where: { userId } }),
+      prisma.eventPlaceholder.findMany({
+        where: { userId, date: { gte: today } },
+        orderBy: { date: "asc" },
+        take: 5,
+      }),
+      prisma.lifeTimelineEntry.findMany({
+        where: { userId, occurredAt: { gte: today } },
+        orderBy: { occurredAt: "asc" },
+        take: 12,
+      }),
+      prisma.reflectionQuestion.findFirst({
+        where: { userId, status: "OPEN" },
+        orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
+      }),
+      getReadinessForDashboard(userId, 3).catch(() => [] as ReadinessPlanData[]),
+      runContextWindowEngine(userId).catch(() => null as ContextWindowData | null),
+    ]);
 
   // ── Derived signals ─────────────────────────────────────────────────────────
   const hour = parseInt(temporal.localTime.split(":")[0] ?? "12", 10);
@@ -116,6 +121,12 @@ export default async function DashboardPage() {
   );
 
   // ── Section layout (Life State Router) ──────────────────────────────────────
+  const hasContextWindow = !!(
+    contextWindow &&
+    (contextWindow.previous || contextWindow.next) &&
+    contextWindow.bridgeRecommendation
+  );
+
   const sections = getStateLayout(lifeState, {
     hasTopTask: !!rightNow,
     hasReadinessPlans: readinessPlans.length > 0,
@@ -124,6 +135,7 @@ export default async function DashboardPage() {
     hasTodayEvents,
     hasContextChips: contextChips.length > 0,
     hasDueLearning: plan.dueLearningItems.length > 0,
+    hasContextWindow,
   });
 
   // ── Section JSX map ─────────────────────────────────────────────────────────
@@ -263,6 +275,10 @@ export default async function DashboardPage() {
     ceo_review: (
       <CeoReview key="ceo_review" plan={plan} />
     ),
+
+    now_flow: contextWindow ? (
+      <NowFlow key="now_flow" data={contextWindow} />
+    ) : null,
   };
 
   return (

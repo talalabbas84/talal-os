@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
+import { refreshContextWindow } from "@/lib/context-windows/context-window-engine";
 import { processCapture as runPipeline } from "@/lib/intelligence/decision-engine";
 import { executeActions } from "@/lib/intelligence/execution-engine";
 import { planFromCapture, planFromUnderstanding } from "@/lib/intelligence/action-planner";
@@ -49,6 +50,7 @@ export async function saveApprovedActions(
 
     const result = await executeActions(userId, actions);
     revalidateAll();
+    refreshContextWindow(userId).catch(() => {});
     return { success: true, data: result };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };
@@ -109,6 +111,7 @@ export async function saveCreateCapture(
 
     const result = await executeActions(userId, actions);
     revalidateAll();
+    refreshContextWindow(userId).catch(() => {});
     return { success: true, data: result };
   } catch {
     return { success: false, error: "Failed to save. Please try again." };

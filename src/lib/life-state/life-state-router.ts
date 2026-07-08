@@ -9,21 +9,22 @@ export interface RoutingContext {
   hasTodayEvents: boolean;
   hasContextChips: boolean;
   hasDueLearning: boolean;
+  hasContextWindow: boolean;  // ContextWindow with enough data to show Now Flow
 }
 
 // Priority-ordered section list per state.
 // Sections requiring data are filtered by RoutingContext at runtime.
 const STATE_SECTIONS: Record<LifeStateType, SectionId[]> = {
-  DEFAULT:      ["greeting", "context", "capture", "right_now", "one_question", "life_feed"],
+  DEFAULT:      ["greeting", "now_flow", "context", "capture", "right_now", "one_question", "life_feed"],
   MORNING:      ["greeting", "context", "right_now", "todays_schedule", "capture", "one_question"],
   FOCUS:        ["greeting", "right_now", "capture"],
-  BREAK:        ["greeting", "break_guide", "capture", "right_now"],
-  PREPARATION:  ["greeting", "getting_ready", "capture", "context", "one_question"],
-  ACTIVE_EVENT: ["greeting", "capture"],
-  REFLECTION:   ["greeting", "reflection_prompt", "one_question", "life_feed", "capture"],
+  BREAK:        ["greeting", "break_guide", "now_flow", "capture", "right_now"],
+  PREPARATION:  ["greeting", "getting_ready", "now_flow", "capture", "context", "one_question"],
+  ACTIVE_EVENT: ["greeting", "now_flow", "capture"],
+  REFLECTION:   ["greeting", "reflection_prompt", "now_flow", "one_question", "life_feed", "capture"],
   LEARNING:     ["greeting", "learning_review", "capture", "right_now"],
   RECOVERY:     ["greeting", "recovery_guide", "capture", "context"],
-  SOCIAL:       ["greeting", "social_guide", "capture"],
+  SOCIAL:       ["greeting", "social_guide", "now_flow", "capture"],
   CEO_REVIEW:   ["greeting", "ceo_review", "context", "capture"],
 };
 
@@ -36,6 +37,7 @@ const DATA_GUARDS: Partial<Record<SectionId, (ctx: RoutingContext) => boolean>> 
   todays_schedule: (ctx) => ctx.hasTodayEvents,
   context:         (ctx) => ctx.hasContextChips,
   learning_review: (ctx) => ctx.hasDueLearning,
+  now_flow:        (ctx) => ctx.hasContextWindow,
 };
 
 export function getStateLayout(state: LifeStateType, ctx: RoutingContext): SectionId[] {

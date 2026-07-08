@@ -27,7 +27,8 @@ export type SectionId =
   | "break_guide"        // post-focus break suggestions
   | "learning_review"    // learning session: due items + review CTA
   | "social_guide"       // social event tips and presence reminders
-  | "ceo_review";        // system-level review: projects, habits, weekly context
+  | "ceo_review"         // system-level review: projects, habits, weekly context
+  | "now_flow";          // Previous → Current → Next windows with bridge recommendation
 
 // ── Home Context ──────────────────────────────────────────────────────────────
 // All signals the engine uses to make decisions.

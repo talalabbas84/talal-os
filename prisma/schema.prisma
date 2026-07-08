@@ -57,6 +57,7 @@ model User {
   followUpQueue     FollowUpQueue[]
   readinessPlans    ReadinessPlan[]
   lifeStateHistory  LifeStateRecord[]
+  contextWindow     ContextWindow?
 }
 
 model UserState {
@@ -1347,6 +1348,29 @@ enum MemorySource {
   MANUAL
   WEEKLY_REVIEW
   AI_REFLECTION
+}
+
+// ── Context Windows Engine ────────────────────────────────────────────────────
+
+model ContextWindow {
+  id                   String   @id @default(cuid())
+  previousSummary      String?
+  currentSummary       String?
+  nextSummary          String?
+  previousEntityType   String?
+  previousEntityId     String?
+  currentEntityType    String?
+  currentEntityId      String?
+  nextEntityType       String?
+  nextEntityId         String?
+  bridgeRecommendation String?
+  createdAt            DateTime @default(now())
+  updatedAt            DateTime @updatedAt
+
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 // ── Life State Engine ─────────────────────────────────────────────────────────
