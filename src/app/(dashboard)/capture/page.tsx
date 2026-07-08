@@ -8,7 +8,7 @@ export const metadata = { title: "Capture — Talal OS" };
 export default async function CapturePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ question?: string }>;
+  searchParams?: Promise<{ question?: string; text?: string }>;
 }) {
   const session = await auth();
   if (!session?.user) redirect("/login");
@@ -19,7 +19,7 @@ export default async function CapturePage({
         where: { id: params.question, userId: session.user.id, status: "OPEN" },
       })
     : null;
-  const initialText = question ? `Answer: ${question.question}\n\n` : "";
+  const initialText = question ? `Answer: ${question.question}\n\n` : (params?.text ?? "");
 
   return (
     <div className="p-6 pb-32 md:pb-6">
