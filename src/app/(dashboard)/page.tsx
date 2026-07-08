@@ -5,6 +5,8 @@ import { prisma } from "@/lib/prisma";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 import { getTemporalContext } from "@/lib/context/temporal-context";
 import { HomeCapture } from "@/features/dashboard/components/home-capture";
+import { getFollowUpQueueItems } from "@/features/follow-up/actions/queue.actions";
+import { FollowUpCard } from "@/features/follow-up/components/follow-up-card";
 import type { DailyPlan } from "@/lib/planning/daily-plan";
 import type { UserState, EventPlaceholder, LifeTimelineEntry } from "@prisma/client";
 
@@ -17,7 +19,7 @@ export default async function DashboardPage() {
   const temporal = getTemporalContext("America/Toronto");
   const today = temporal.todayMidnight;
 
-  const [plan, userState, nextEvents, todayStory, oneQuestion] = await Promise.all([
+  const [plan, userState, nextEvents, todayStory, oneQuestion, followUps] = await Promise.all([
     buildDailyPlan(userId),
     prisma.userState.findUnique({ where: { userId } }),
     prisma.eventPlaceholder.findMany({
@@ -34,6 +36,7 @@ export default async function DashboardPage() {
       where: { userId, status: "OPEN" },
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
     }),
+    getFollowUpQueueItems(3).catch(() => [] as Awaited<ReturnType<typeof getFollowUpQueueItems>>),
   ]);
 
   const hour = parseInt(temporal.localTime.split(":")[0] ?? "12", 10);
@@ -132,6 +135,20 @@ export default async function DashboardPage() {
                   </Link>
                 )}
               </div>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* ── Today's Follow-ups ───────────────────────────────────────────── */}
+      {followUps.length > 0 && (
+        <section>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">
+            Follow-ups
+          </p>
+          <div className="space-y-2">
+            {followUps.map((item) => (
+              <FollowUpCard key={item.id} item={item} />
             ))}
           </div>
         </section>

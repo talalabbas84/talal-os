@@ -27,6 +27,7 @@ import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-le
 import { planFromThoughtUnits, splitThoughts } from "./thought-splitter";
 import { planPersonalIntelligenceActions } from "./personal-intelligence";
 import { enrichCaptureRouting } from "./capture-routing-enricher";
+import { detectClarification } from "./clarification-engine";
 import type { PipelineResult, IntentResult } from "./types";
 import type { CaptureResult } from "@/lib/ai/types";
 
@@ -265,8 +266,14 @@ export async function processCapture(
         capture,
         existingActions: baseActions,
       });
+      const clarification = await detectClarification({
+        userId,
+        capture,
+        originalText: articulation.original,
+      });
       return {
         articulation,
+        clarification,
         intent: intentResult.intent as "CREATE" | "UNKNOWN",
         intentResult,
         capture,

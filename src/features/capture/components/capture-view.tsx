@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import { saveDraft, getDrafts, deleteDraft } from "../actions/draft.actions";
-import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
+import type { PipelineResult, PlannedAction, ExecutionResult, ClarificationRequest } from "@/lib/intelligence/types";
 import type { EventPlaceholderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
@@ -79,10 +79,11 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
-  function handleProcess() {
+  function handleProcess(extraContext?: string) {
     setError(null);
     startProcessing(async () => {
-      const res = await processCapture(text);
+      const captureText = extraContext ? `${text}\n\n[Clarification: ${extraContext}]` : text;
+      const res = await processCapture(captureText);
       if (!res.success) { setError(res.error); return; }
 
       const r = res.data;
@@ -255,10 +256,12 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
           onTogglePersonInsight={togglePersonInsight}
           onToggleAction={toggleAction}
           onMemorySaveEdit={handleMemorySaveEdit}
+          onClarify={(ctx) => handleProcess(ctx)}
           onEdit={handleRetry}
           onSave={handleSave}
           onCancel={handleReset}
           isSaving={isSaving}
+          isProcessing={isProcessing}
           error={error}
         />
       )}
@@ -385,7 +388,7 @@ function InputView({
 function PreviewView({
   result, createInclusion, actionInclusion,
   onToggleCreate, onToggleCreateJournal, onTogglePersonInsight, onToggleAction, onMemorySaveEdit,
-  onEdit, onSave, onCancel, isSaving, error,
+  onClarify, onEdit, onSave, onCancel, isSaving, isProcessing, error,
 }: {
   result: PipelineResult;
   createInclusion: CreateInclusion | null;
@@ -395,10 +398,12 @@ function PreviewView({
   onTogglePersonInsight: (personIndex: number, insightIndex: number) => void;
   onToggleAction: (index: number) => void;
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
+  onClarify: (context: string) => void;
   onEdit: () => void;
   onSave: () => void;
   onCancel: () => void;
   isSaving: boolean;
+  isProcessing: boolean;
   error: string | null;
 }) {
   const selectedCount = createInclusion
@@ -421,6 +426,14 @@ function PreviewView({
   const canSave = isQuestion || selectedCount > 0 || hasNoCreatePreviewContent(result);
   return (
     <div className="space-y-4">
+      {result.clarification && (
+        <ClarificationChoiceBlock
+          clarification={result.clarification}
+          onSelect={onClarify}
+          disabled={isProcessing || isSaving}
+        />
+      )}
+
       <PreviewBlock title="I understood">
         <UnderstandingText result={result} />
       </PreviewBlock>
@@ -573,6 +586,40 @@ function ClarificationBlock({ question }: { question: string }) {
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
       <p className="text-sm leading-relaxed text-amber-900 dark:text-amber-100">{question}</p>
+    </div>
+  );
+}
+
+function ClarificationChoiceBlock({
+  clarification,
+  onSelect,
+  disabled,
+}: {
+  clarification: ClarificationRequest;
+  onSelect: (context: string) => void;
+  disabled: boolean;
+}) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 dark:border-amber-900 dark:bg-amber-950/30">
+      <p className="mb-3 text-sm font-medium text-amber-900 dark:text-amber-100">
+        ❓ {clarification.question}
+      </p>
+      <div className="flex flex-wrap gap-2">
+        {clarification.choices.map((choice) => (
+          <button
+            key={choice.id}
+            disabled={disabled}
+            onClick={() => onSelect(`${clarification.question} → ${choice.label}`)}
+            className={cn(
+              "rounded-xl border border-amber-300 bg-white px-3 py-1.5 text-sm text-amber-900 transition-colors",
+              "hover:bg-amber-100 dark:border-amber-700 dark:bg-amber-950 dark:text-amber-100 dark:hover:bg-amber-900",
+              "disabled:cursor-not-allowed disabled:opacity-40",
+            )}
+          >
+            {choice.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

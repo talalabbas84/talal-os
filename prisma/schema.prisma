@@ -54,6 +54,7 @@ model User {
   captureDrafts     CaptureDraft[]
   pushSubscriptions PushSubscription[]
   lifeTimeline      LifeTimelineEntry[]
+  followUpQueue     FollowUpQueue[]
 }
 
 model UserState {
@@ -907,6 +908,49 @@ enum LifeCategory {
   GROWTH
   CREATIVE
   OTHER
+}
+
+model FollowUpQueue {
+  id          String              @id @default(cuid())
+  type        FollowUpQueueType
+  status      FollowUpQueueStatus @default(PENDING)
+  priority    Int                 @default(5)   // 1 (low) – 10 (urgent)
+  question    String              // The follow-up prompt shown to user
+  reason      String?             // Why this was generated
+  entityType  String?             // "Task" | "Person" | "Event" | etc.
+  entityId    String?             // ID of the linked entity
+  entityLabel String?             // Human-readable label for the entity
+  answer      String?             // User's answer (if answered)
+  suggestedAt DateTime            @default(now())
+  expiresAt   DateTime?
+  answeredAt  DateTime?
+  createdAt   DateTime            @default(now())
+  updatedAt   DateTime            @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, status])
+  @@index([userId, suggestedAt])
+  @@index([userId, type, status])
+  @@index([entityType, entityId])
+}
+
+enum FollowUpQueueType {
+  CLARIFICATION   // Ambiguous capture — ask user to clarify
+  PREPARATION     // Upcoming event needs prep (e.g. "What do you need for your meeting?")
+  REMINDER        // Task or commitment deadline approaching
+  REFLECTION      // Post-event reflection (e.g. "How did the dinner go?")
+  TASK_CHECK      // Check in on long-running task progress
+  RELATIONSHIP    // Relationship nurture prompt
+  LEARNING        // Spaced repetition or review prompt
+}
+
+enum FollowUpQueueStatus {
+  PENDING
+  ANSWERED
+  DISMISSED
+  EXPIRED
 }
 
 enum PersonMemoryType {

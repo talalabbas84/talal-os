@@ -533,8 +533,22 @@ export interface PlanSummary {
 // ── Pipeline result ───────────────────────────────────────────────────────────
 // Discriminated union — the capture-view renders based on intent.
 
+export interface ClarificationChoice {
+  label: string;
+  id: string;    // entity id
+  type: string;  // "project" | "person" | "task"
+}
+
+export interface ClarificationRequest {
+  question: string;     // "Which project does this belong to?"
+  field: string;        // "projectName" | "person" | ...
+  choices: ClarificationChoice[];
+  followUpQueueId?: string;
+}
+
 type PipelineBase = {
   articulation: ArticulationResult;
+  clarification?: ClarificationRequest;
 };
 
 export type PipelineResult = PipelineBase &
