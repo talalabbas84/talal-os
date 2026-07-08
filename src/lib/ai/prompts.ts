@@ -303,7 +303,10 @@ Intents:
 - QUESTION: Asking for information. "What is X", "How do I Y", "Can you explain"
 - REFLECTION: Emotional processing. "I feel anxious", "Feeling low today", "I'm struggling"
 - JOURNAL: Recapping what happened. "Today I did", "I accomplished", "Here's what happened"
+- HEALTH: Current physical state, illness, sleep, or health goal. "I'm sick", "I can't sleep", "I feel tired", "I want to sleep earlier". NOT a task — this is an observation or aspiration about physical wellbeing.
 - UNKNOWN: Cannot confidently classify
+
+IMPORTANT: "I can't sleep", "I'm sick", "I'm exhausted", "I have a headache", or similar health observations are HEALTH, never CREATE. Do not create tasks from health observations.
 
 Return: { "intent": "...", "confidence": "high|medium|low", "reason": "one sentence" }`;
 }

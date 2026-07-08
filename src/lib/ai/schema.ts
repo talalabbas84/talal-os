@@ -228,7 +228,7 @@ export const captureResultSchema = z.object({
 
 export const INTENT_VALUES = [
   "CREATE", "UPDATE", "MEMORY", "DECISION", "PLAN",
-  "QUESTION", "REFLECTION", "JOURNAL", "UNKNOWN",
+  "QUESTION", "REFLECTION", "JOURNAL", "HEALTH", "UNKNOWN",
 ] as const;
 
 export const intentResultSchema = z.object({

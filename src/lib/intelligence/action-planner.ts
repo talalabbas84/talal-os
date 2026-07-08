@@ -17,7 +17,11 @@ import type {
   ReflectionData,
   PlanSummary,
   ArticulationResult,
+  ThoughtPayload,
+  ActivityLogPayload,
+  UserStatePayload,
 } from "./types";
+import type { HealthDetection } from "./health-state-detector";
 import type {
   CaptureResult,
   CommandOutput,
@@ -384,6 +388,84 @@ function planSmartCaptureShortcuts(reflection: string, summary: string): Planned
         reason: "Capture included deferral language such as not today, skip, later, tomorrow, or reschedule.",
         createdFrom: "CAPTURE_SHORTCUT",
       },
+    });
+  }
+
+  return actions;
+}
+
+// ── From health / current state capture ──────────────────────────────────────
+
+export function planFromHealthState(rawText: string, health: HealthDetection): PlannedAction[] {
+  const actions: PlannedAction[] = [];
+
+  // Always log as a thought (HEALTH category) — captures the observation
+  actions.push({
+    id: nextId("health-thought"),
+    type: "CREATE_THOUGHT",
+    label: "Log health observation",
+    payload: {
+      rawText,
+      cleanedText: rawText,
+      summary: rawText.slice(0, 120),
+      category: "HEALTH",
+      importance: "MEDIUM",
+      source: "CAPTURE",
+    } satisfies ThoughtPayload,
+  });
+
+  if (health.type === "CURRENT_STATE" || health.type === "RECOVERY") {
+    // Update user state with mood + energy
+    const stateUpdate: Partial<UserStatePayload> = {};
+    if (health.suggestedMood) stateUpdate.currentMood = health.suggestedMood;
+    if (health.suggestedEnergyLevel) stateUpdate.energyLevel = health.suggestedEnergyLevel;
+
+    if (Object.keys(stateUpdate).length > 0) {
+      actions.push({
+        id: nextId("health-state"),
+        type: "UPDATE_USER_STATE",
+        label: `Update state: ${health.suggestedMood ?? health.suggestedEnergyLevel}`,
+        payload: stateUpdate as UserStatePayload,
+      });
+    }
+
+    // Enter recovery mode if sick or exhausted
+    if (health.suggestedRecoveryMode) {
+      actions.push({
+        id: nextId("health-recovery"),
+        type: "ENABLE_RECOVERY_MODE",
+        label: "Enter Recovery Mode",
+        payload: {},
+      });
+    }
+
+    // Log as activity
+    actions.push({
+      id: nextId("health-log"),
+      type: "CREATE_ACTIVITY_LOG",
+      label: "Log current state",
+      payload: {
+        activity: rawText.slice(0, 100),
+        category: health.suggestedRecoveryMode ? "RECOVERY" : "REST",
+        mood: health.suggestedMood,
+        energyLevel: health.suggestedEnergyLevel,
+      } satisfies ActivityLogPayload,
+    });
+  }
+
+  if (health.type === "HEALTH_GOAL") {
+    // Save as a health memory / goal
+    actions.push({
+      id: nextId("health-goal"),
+      type: "CREATE_MEMORY",
+      label: "Save health goal",
+      payload: {
+        title: rawText.slice(0, 80),
+        content: rawText,
+        type: "HEALTH_INSIGHT",
+        importance: "HIGH",
+        source: "CAPTURE",
+      } satisfies MemoryPayload,
     });
   }
 

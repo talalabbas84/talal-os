@@ -892,6 +892,7 @@ function extractPersonInsights(text: string, name: string): PersonInsightItemOut
 
 const INTENT_PATTERNS: Array<{ regex: RegExp; intent: Intent; reason: string }> = [
   { regex: /\b(?:what should i|what do i|help me (?:decide|prioritize)|i'?m overwhelmed|feeling stuck|don'?t know what to)\b/i, intent: "DECISION", reason: "Asking for guidance or feeling overwhelmed" },
+  { regex: /\b(?:i'?m (?:sick|ill|tired|exhausted|fatigued)|can'?t sleep|insomnia|i have a (?:headache|fever|cold)|feeling (?:sick|unwell|terrible|awful)|in pain|burnt?-?out)\b/i, intent: "HEALTH", reason: "Physical or health state observation" },
   { regex: /\b(?:i'?m feeling|feeling (?:anxious|sad|down|low|frustrated|angry|nervous|worried|depressed|stressed))\b/i, intent: "REFLECTION", reason: "Emotional processing" },
   { regex: /\b(?:plan (?:my|the|for|this) (?:day|week|month)|what'?s my focus|weekly plan|daily plan)\b/i, intent: "PLAN", reason: "Requesting a plan" },
   { regex: /\b(?:what is|how (?:do i|does|can i)|can you (?:explain|tell me)|tell me about|what are the)\b/i, intent: "QUESTION", reason: "Asking for information" },

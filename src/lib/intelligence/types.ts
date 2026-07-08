@@ -15,6 +15,7 @@ export const INTENTS = [
   "QUESTION",    // What is X, how do I Y
   "REFLECTION",  // Emotional processing, how I feel
   "JOURNAL",     // Today I did, I accomplished
+  "HEALTH",      // Current physical state, sleep, illness, health goal
   "UNKNOWN",     // Falls back to CREATE
 ] as const;
 
@@ -593,6 +594,11 @@ export type PipelineResult = PipelineBase &
       intent: "MEMORY";
       intentResult: IntentResult;
       candidates: MemoryCandidateOutput[];
+      actions: PlannedAction[];
+    }
+  | {
+      intent: "HEALTH";
+      intentResult: IntentResult;
       actions: PlannedAction[];
     }
   );

@@ -28,6 +28,8 @@ import { planFromThoughtUnits, splitThoughts } from "./thought-splitter";
 import { planPersonalIntelligenceActions } from "./personal-intelligence";
 import { enrichCaptureRouting } from "./capture-routing-enricher";
 import { detectClarification } from "./clarification-engine";
+import { detectHealthCapture, isHealthObservationTask } from "./health-state-detector";
+import { planFromHealthState } from "./action-planner";
 import type { PipelineResult, IntentResult } from "./types";
 import type { CaptureResult } from "@/lib/ai/types";
 
@@ -65,7 +67,16 @@ export async function processCapture(
   }
 
   // 1. Classify intent from the clarified capture (fast, minimal context)
-  const intentResult: IntentResult = await routeIntent(articulatedText);
+  let intentResult: IntentResult = await routeIntent(articulatedText);
+
+  // Override: heuristic health detection catches cases where the AI misclassifies
+  // physical/health state captures as CREATE (which would incorrectly create tasks).
+  if (intentResult.intent === "CREATE" || intentResult.intent === "UNKNOWN") {
+    const healthHit = detectHealthCapture(text) ?? detectHealthCapture(articulatedText);
+    if (healthHit && healthHit.confidence === "high") {
+      intentResult = { intent: "HEALTH", confidence: "high", reason: "Health state detected by heuristic." };
+    }
+  }
 
   // 2. Build full user context (needed by most workflows)
   const { prompt: contextPrompt } = await buildUserContext(userId);
@@ -223,6 +234,29 @@ export async function processCapture(
       };
     }
 
+    case "HEALTH": {
+      // Physical state, illness, sleep issues, health goals.
+      // Never creates tasks — routes to UserState + ActivityLog + Thought.
+      const health = detectHealthCapture(text) ?? detectHealthCapture(articulatedText) ?? {
+        type: "CURRENT_STATE" as const,
+        confidence: "medium" as const,
+      };
+      const healthActions = planFromHealthState(articulatedText || text, health);
+      const thoughtUnitHealthActions = planFromThoughtUnits(thoughtUnits);
+      const personalIntelligenceActions = await planPersonalIntelligenceActions({
+        userId,
+        rawText: articulation.original,
+        cleanedText: articulatedText,
+        existingActions: healthActions,
+      });
+      return {
+        articulation,
+        intent: "HEALTH",
+        intentResult,
+        actions: [...understandingActions, ...thoughtUnitHealthActions, ...healthActions, ...personalIntelligenceActions],
+      };
+    }
+
     case "CREATE":
     case "UNKNOWN":
     default: {
@@ -291,7 +325,21 @@ function isStandaloneSmartShortcut(text: string): boolean {
 }
 
 function normalizeCapture(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
-  return enrichCaptureRouting(sanitizeHabitSignals(capture, rawText, articulatedText), rawText, articulatedText);
+  const sanitized = sanitizeHabitSignals(capture, rawText, articulatedText);
+  return enrichCaptureRouting(sanitizeHealthTasks(sanitized, rawText, articulatedText), rawText, articulatedText);
+}
+
+// Removes tasks that are health observations masquerading as actionable items.
+// Only fires when the broader capture context is health-related.
+function sanitizeHealthTasks(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
+  const source = `${rawText}\n${articulatedText}`;
+  // Only sanitize if the capture has clear health signals
+  if (!detectHealthCapture(source)) return capture;
+
+  const tasks = capture.data.tasks.filter((t) => !isHealthObservationTask(t.title));
+  if (tasks.length === capture.data.tasks.length) return capture;
+
+  return { ...capture, data: { ...capture.data, tasks } };
 }
 
 function sanitizeHabitSignals(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
