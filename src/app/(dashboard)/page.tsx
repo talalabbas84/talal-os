@@ -7,6 +7,8 @@ import { getTemporalContext } from "@/lib/context/temporal-context";
 import { HomeCapture } from "@/features/dashboard/components/home-capture";
 import { getFollowUpQueueItems } from "@/features/follow-up/actions/queue.actions";
 import { FollowUpCard } from "@/features/follow-up/components/follow-up-card";
+import { getReadinessForDashboard } from "@/lib/readiness/readiness-engine";
+import { ReadinessCard } from "@/features/readiness/components/readiness-card";
 import type { DailyPlan } from "@/lib/planning/daily-plan";
 import type { UserState, EventPlaceholder, LifeTimelineEntry } from "@prisma/client";
 
@@ -19,7 +21,7 @@ export default async function DashboardPage() {
   const temporal = getTemporalContext("America/Toronto");
   const today = temporal.todayMidnight;
 
-  const [plan, userState, nextEvents, todayStory, oneQuestion, followUps] = await Promise.all([
+  const [plan, userState, nextEvents, todayStory, oneQuestion, followUps, readinessPlans] = await Promise.all([
     buildDailyPlan(userId),
     prisma.userState.findUnique({ where: { userId } }),
     prisma.eventPlaceholder.findMany({
@@ -37,6 +39,7 @@ export default async function DashboardPage() {
       orderBy: [{ priority: "desc" }, { createdAt: "desc" }],
     }),
     getFollowUpQueueItems(3).catch(() => [] as Awaited<ReturnType<typeof getFollowUpQueueItems>>),
+    getReadinessForDashboard(userId, 3).catch(() => []),
   ]);
 
   const hour = parseInt(temporal.localTime.split(":")[0] ?? "12", 10);
@@ -88,6 +91,20 @@ export default async function DashboardPage() {
       <section>
         <HomeCapture />
       </section>
+
+      {/* ── Getting Ready ────────────────────────────────────────────────── */}
+      {readinessPlans.length > 0 && (
+        <section>
+          <p className="mb-3 text-xs font-semibold uppercase tracking-widest text-neutral-400 dark:text-neutral-500">
+            Getting Ready
+          </p>
+          <div className="space-y-3">
+            {readinessPlans.map((rp) => (
+              <ReadinessCard key={rp.id} plan={rp} now={temporal.now} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* ── Right Now ────────────────────────────────────────────────────── */}
       {rightNow && (

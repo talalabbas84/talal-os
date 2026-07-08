@@ -55,6 +55,7 @@ model User {
   pushSubscriptions PushSubscription[]
   lifeTimeline      LifeTimelineEntry[]
   followUpQueue     FollowUpQueue[]
+  readinessPlans    ReadinessPlan[]
 }
 
 model UserState {
@@ -951,6 +952,54 @@ enum FollowUpQueueStatus {
   ANSWERED
   DISMISSED
   EXPIRED
+}
+
+model ReadinessPlan {
+  id               String              @id @default(cuid())
+  entityType       ReadinessEntityType
+  entityId         String?             // ID of the linked EventPlaceholder / Task / etc.
+  title            String
+  scheduledFor     DateTime            // full datetime of the event
+  status           ReadinessStatus     @default(NOT_STARTED)
+  overallReadiness ReadinessLevel      @default(LOW)
+  preparedItems    Json                @default("[]") // PreparedItem[]
+  missingItems     Json                @default("[]") // MissingItem[]
+  recommendations  Json                @default("[]") // ReadinessRecommendation[]
+  focusTip         String?
+  generatedAt      DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, entityType, entityId])
+  @@index([userId, scheduledFor])
+  @@index([userId, status])
+}
+
+enum ReadinessEntityType {
+  TASK
+  EVENT
+  PERSON
+  PROJECT
+  LEARNING
+  INTERVIEW
+  PERFORMANCE
+  TRAVEL
+  CUSTOM
+}
+
+enum ReadinessStatus {
+  NOT_STARTED
+  PREPARING
+  READY
+  COMPLETED
+}
+
+enum ReadinessLevel {
+  LOW
+  MEDIUM
+  HIGH
 }
 
 enum PersonMemoryType {
