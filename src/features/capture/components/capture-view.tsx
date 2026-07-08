@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useEffect } from "react";
 import {
   Sparkles,
   Loader2,
@@ -8,8 +8,11 @@ import {
   CheckCircle2,
   Pencil,
   X,
+  FileText,
+  Trash2,
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
+import { saveDraft, getDrafts, deleteDraft } from "../actions/draft.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
 import type { MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
@@ -41,6 +44,14 @@ interface MemoryEdit {
 // For non-CREATE intents — toggle planned actions by index
 type ActionInclusion = boolean[];
 
+// ── Draft type ────────────────────────────────────────────────────────────────
+
+interface Draft {
+  id: string;
+  text: string;
+  createdAt: Date;
+}
+
 // ── Root component ────────────────────────────────────────────────────────────
 
 export function CaptureView({ userName, initialText = "" }: { userName: string; initialText?: string }) {
@@ -56,6 +67,14 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
   const [saveResult, setSaveResult] = useState<ExecutionResult | null>(null);
   const [isProcessing, startProcessing] = useTransition();
   const [isSaving, startSaving] = useTransition();
+  const [drafts, setDrafts] = useState<Draft[]>([]);
+  const [isSavingDraft, startSavingDraft] = useTransition();
+
+  useEffect(() => {
+    getDrafts().then((ds) =>
+      setDrafts(ds.map((d: { id: string; text: string; createdAt: Date }) => ({ id: d.id, text: d.text, createdAt: d.createdAt }))),
+    );
+  }, []);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -166,6 +185,28 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
     });
   }
 
+  function handleSaveDraft() {
+    if (text.trim().length < 3) return;
+    startSavingDraft(async () => {
+      const res = await saveDraft(text);
+      if (res.success) {
+        setDrafts((prev) => [{ id: res.data.id, text: res.data.text, createdAt: res.data.createdAt }, ...prev]);
+        setText("");
+      }
+    });
+  }
+
+  function handleLoadDraft(draft: Draft) {
+    setText(draft.text);
+    setDrafts((prev) => prev.filter((d) => d.id !== draft.id));
+    deleteDraft(draft.id);
+  }
+
+  function handleDeleteDraft(id: string) {
+    setDrafts((prev) => prev.filter((d) => d.id !== id));
+    deleteDraft(id);
+  }
+
   function handleReset() {
     setStep("input");
     setText("");
@@ -194,6 +235,11 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
           isProcessing={isProcessing}
           error={error}
           onDismissError={() => setError(null)}
+          drafts={drafts}
+          onSaveDraft={handleSaveDraft}
+          onLoadDraft={handleLoadDraft}
+          onDeleteDraft={handleDeleteDraft}
+          isSavingDraft={isSavingDraft}
         />
       )}
 
@@ -222,6 +268,7 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
 
 function InputView({
   firstName, text, onTextChange, onProcess, isProcessing, error, onDismissError,
+  drafts, onSaveDraft, onLoadDraft, onDeleteDraft, isSavingDraft,
 }: {
   firstName: string;
   text: string;
@@ -230,7 +277,13 @@ function InputView({
   isProcessing: boolean;
   error: string | null;
   onDismissError: () => void;
+  drafts: Draft[];
+  onSaveDraft: () => void;
+  onLoadDraft: (draft: Draft) => void;
+  onDeleteDraft: (id: string) => void;
+  isSavingDraft: boolean;
 }) {
+  const hasText = text.trim().length >= 3;
   return (
     <div className="space-y-5">
       <div>
@@ -263,22 +316,64 @@ function InputView({
         </div>
       )}
 
-      <button
-        onClick={onProcess}
-        disabled={isProcessing || text.trim().length < 3}
-        className={cn(
-          "flex w-full items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
-          "bg-neutral-900 text-white hover:bg-neutral-700",
-          "dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-200",
-          "disabled:cursor-not-allowed disabled:opacity-40",
+      <div className="flex items-center gap-3">
+        <button
+          onClick={onProcess}
+          disabled={isProcessing || !hasText}
+          className={cn(
+            "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
+            "bg-neutral-900 text-white hover:bg-neutral-700",
+            "dark:bg-neutral-50 dark:text-neutral-900 dark:hover:bg-neutral-200",
+            "disabled:cursor-not-allowed disabled:opacity-40",
+          )}
+        >
+          {isProcessing ? (
+            <><Loader2 className="h-4 w-4 animate-spin" />Processing…</>
+          ) : (
+            <><Sparkles className="h-4 w-4" />Continue</>
+          )}
+        </button>
+
+        {hasText && (
+          <button
+            onClick={onSaveDraft}
+            disabled={isSavingDraft || isProcessing}
+            title="Save as draft — come back to it later"
+            className={cn(
+              "flex items-center gap-1.5 rounded-xl border border-neutral-200 px-3 py-3 text-sm text-neutral-500 transition-colors hover:border-neutral-300 hover:text-neutral-700",
+              "dark:border-neutral-700 dark:text-neutral-400 dark:hover:border-neutral-600 dark:hover:text-neutral-200",
+              "disabled:cursor-not-allowed disabled:opacity-40",
+            )}
+          >
+            {isSavingDraft ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+          </button>
         )}
-      >
-        {isProcessing ? (
-          <><Loader2 className="h-4 w-4 animate-spin" />Processing…</>
-        ) : (
-          <><Sparkles className="h-4 w-4" />Continue</>
-        )}
-      </button>
+      </div>
+
+      {drafts.length > 0 && (
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-neutral-400 dark:text-neutral-500">Saved drafts</p>
+          {drafts.map((draft) => (
+            <div
+              key={draft.id}
+              className="flex items-center gap-2 rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2.5 dark:border-neutral-800 dark:bg-neutral-900"
+            >
+              <button
+                onClick={() => onLoadDraft(draft)}
+                className="min-w-0 flex-1 text-left text-sm text-neutral-700 hover:text-neutral-900 dark:text-neutral-300 dark:hover:text-neutral-100"
+              >
+                <span className="block truncate">{draft.text.slice(0, 80)}{draft.text.length > 80 ? "…" : ""}</span>
+              </button>
+              <button
+                onClick={() => onDeleteDraft(draft.id)}
+                className="shrink-0 text-neutral-300 hover:text-red-400 dark:text-neutral-600 dark:hover:text-red-500"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

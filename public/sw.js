@@ -1,4 +1,4 @@
-const CACHE_NAME = "talal-os-v2";
+const CACHE_NAME = "talal-os-v3";
 const STATIC_ASSETS = ["/manifest.webmanifest", "/offline.html"];
 
 self.addEventListener("install", (event) => {
@@ -17,6 +17,34 @@ self.addEventListener("activate", (event) => {
       ),
   );
   self.clients.claim();
+});
+
+self.addEventListener("push", (event) => {
+  if (!event.data) return;
+  let payload;
+  try { payload = event.data.json(); } catch { payload = { title: "Talal OS", body: event.data.text() }; }
+  const title = payload.title ?? "Talal OS";
+  event.waitUntil(
+    self.registration.showNotification(title, {
+      body: payload.body ?? "",
+      icon: "/icons/icon-192x192.png",
+      badge: "/icons/icon-192x192.png",
+      data: { url: payload.url ?? "/" },
+    }),
+  );
+});
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const url = event.notification.data?.url ?? "/";
+  event.waitUntil(
+    clients.matchAll({ type: "window", includeUncontrolled: true }).then((list) => {
+      for (const client of list) {
+        if (client.url.includes(url) && "focus" in client) return client.focus();
+      }
+      return clients.openWindow(url);
+    }),
+  );
 });
 
 self.addEventListener("fetch", (event) => {

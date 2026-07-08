@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getTemporalContext } from "./temporal-context";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -31,16 +32,14 @@ export interface UserContext {
 
 // ── Builder ───────────────────────────────────────────────────────────────────
 
-export async function buildUserContext(userId: string): Promise<{
+export async function buildUserContext(userId: string, timezone = "America/Toronto"): Promise<{
   raw: UserContext;
   prompt: string;
 }> {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const tomorrow = new Date(today);
-  tomorrow.setDate(tomorrow.getDate() + 1);
-  const dayAfter = new Date(tomorrow);
-  dayAfter.setDate(dayAfter.getDate() + 1);
+  const temporal = getTemporalContext(timezone);
+  const today = temporal.todayMidnight;
+  const tomorrow = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 1));
+  const dayAfter = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + 2));
 
   const [projects, tasks, habits, latestLog, recentIdeas, recentMemories] =
     await Promise.all([
@@ -129,21 +128,14 @@ export async function buildUserContext(userId: string): Promise<{
     })),
   };
 
-  return { raw, prompt: buildContextPrompt(raw, today) };
+  return { raw, prompt: buildContextPrompt(raw, today, temporal.prompt) };
 }
 
 // ── Prompt formatter ──────────────────────────────────────────────────────────
 
-function buildContextPrompt(ctx: UserContext, today: Date): string {
+function buildContextPrompt(ctx: UserContext, today: Date, temporalPrompt: string): string {
   const lines: string[] = [];
-
-  const dayLabel = today.toLocaleDateString("en-CA", {
-    weekday: "long",
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  });
-  lines.push(`TODAY: ${dayLabel}`);
+  lines.push(temporalPrompt);
 
   if (ctx.projects.length > 0) {
     const ps = ctx.projects
