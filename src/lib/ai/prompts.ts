@@ -63,6 +63,25 @@ needsReminder (boolean):
 - true if: "remind me", "don't forget", "after work", "before X", time-specific context
 - false otherwise
 
+━━ FUTURE PLANS / EVENT PLACEHOLDERS ━━
+Extract planned events into events when the user mentions a future appointment, dinner, class, meetup, call, date, social plan, travel, or scheduled activity.
+
+Use events instead of tasks when the item is primarily something happening at a date/time.
+
+Examples:
+- "Dinner with Michael this Thursday after dance at 9pm" → event title "Dinner with Michael", date resolved to this Thursday, time "21:00", relatedPersonName "Michael", needsReminder true.
+- "Dance class Thursday at 8" → event title "Dance class", date resolved if possible, time "20:00" if PM is clear from context, needsReminder true.
+
+For each event:
+- title: concise name of the plan
+- description: useful context, e.g. "After dance class"
+- date: YYYY-MM-DD when mentioned or safely resolved
+- time: HH:MM when mentioned, otherwise null
+- location: explicit location only, otherwise null
+- relatedPersonName: person name if the event is with someone, otherwise null
+- needsReminder: true for future dated/time-specific plans
+- confidence: high if explicit, medium if inferred, low if uncertain
+
 ━━ PRIORITY MATRIX ━━
 For each task, assess independently:
 
@@ -85,7 +104,8 @@ energyRequired (LOW | MEDIUM | HIGH):
 Detect when the user mentions a real person. Extract structured people updates.
 
 Trigger phrases: "I met [Name]", "I talked to [Name]", "[Name] said", "[Name]'s birthday",
-"[Name] told me", "follow up with [Name]", "remind me to ask [Name]".
+"[Name] told me", "follow up with [Name]", "remind me to ask [Name]", "dinner with [Name]",
+"meeting [Name]", "plan with [Name]".
 
 For each person mentioned:
 - personName: their name (capitalize properly)
@@ -188,6 +208,18 @@ JSON structure:
     "habits": [{ "name": "string", "completed": true, "note": "string", "confidence": "high|medium|low" }],
     "projects": [{ "name": "string", "description": "string", "priority": "LOW|MEDIUM|HIGH|URGENT", "confidence": "high|medium|low" }],
     "reminders": [{ "title": "string", "when": "string or null", "confidence": "high|medium|low" }],
+    "events": [
+      {
+        "title": "string",
+        "description": "string",
+        "date": "YYYY-MM-DD or null",
+        "time": "HH:MM or null",
+        "location": "string or null",
+        "relatedPersonName": "string or null",
+        "needsReminder": true,
+        "confidence": "high|medium|low"
+      }
+    ],
     "memoryCandidates": [
       {
         "title": "string",

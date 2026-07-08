@@ -14,7 +14,7 @@ import {
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import { saveDraft, getDrafts, deleteDraft } from "../actions/draft.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
-import type { MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
+import type { EventPlaceholderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
@@ -29,6 +29,7 @@ interface CreateInclusion {
   habits: boolean[];
   projects: boolean[];
   reminders: boolean[];
+  events: boolean[];
   memories: boolean[];
   commands: boolean[];
   people: boolean[];
@@ -96,6 +97,7 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
           habits: d.habits.map((h) => h.confidence !== "low"),
           projects: d.projects.map(() => false),
           reminders: d.reminders.map((rem) => rem.confidence !== "low"),
+          events: d.events.map((event) => event.confidence !== "low" && !!event.date),
           memories: d.memoryCandidates.map((m) => m.importance === "PERMANENT" || m.importance === "HIGH"),
           commands: d.commands.map((c) => c.confidence !== "low"),
           people: d.peopleUpdates.map((p) => p.confidence !== "low"),
@@ -405,6 +407,7 @@ function PreviewView({
       createInclusion.habits.filter(Boolean).length +
       createInclusion.projects.filter(Boolean).length +
       createInclusion.reminders.filter(Boolean).length +
+      createInclusion.events.filter(Boolean).length +
       createInclusion.memories.filter(Boolean).length +
       createInclusion.commands.filter(Boolean).length +
       createInclusion.people.filter(Boolean).length +
@@ -415,7 +418,7 @@ function PreviewView({
     : 0;
 
   const isQuestion = result.intent === "QUESTION";
-  const canSave = isQuestion || selectedCount > 0;
+  const canSave = isQuestion || selectedCount > 0 || hasNoCreatePreviewContent(result);
   return (
     <div className="space-y-4">
       <PreviewBlock title="I understood">
@@ -574,6 +577,17 @@ function ClarificationBlock({ question }: { question: string }) {
   );
 }
 
+function hasNoCreatePreviewContent(result: PipelineResult): boolean {
+  if (result.intent !== "CREATE" && result.intent !== "UNKNOWN") return false;
+  const d = result.capture.data;
+  return !(
+    d.tasks.length > 0 || d.ideas.length > 0 || d.habits.length > 0 ||
+    d.projects.length > 0 || d.reminders.length > 0 || d.events.length > 0 ||
+    d.memoryCandidates.length > 0 || d.commands.length > 0 || d.peopleUpdates.length > 0 ||
+    d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow || d.journal.distractedBy
+  );
+}
+
 // ── Shared plan primitives ────────────────────────────────────────────────────
 
 function PlanSection({ label, children }: { label: string; children: React.ReactNode }) {
@@ -630,14 +644,14 @@ function AssistantPlanView({
   const d = capture.data;
   const hasContent =
     d.tasks.length > 0 || d.ideas.length > 0 || d.habits.length > 0 ||
-    d.projects.length > 0 || d.reminders.length > 0 || d.memoryCandidates.length > 0 ||
+    d.projects.length > 0 || d.reminders.length > 0 || d.events.length > 0 || d.memoryCandidates.length > 0 ||
     d.commands.length > 0 || d.peopleUpdates.length > 0 ||
     !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow || d.journal.distractedBy);
 
   if (!hasContent) {
     return (
       <p className="py-2 text-sm text-neutral-400">
-        Nothing specific to add — just logging your capture.
+        Save this thought for later.
       </p>
     );
   }
@@ -680,6 +694,16 @@ function AssistantPlanView({
             <PlanItem key={i} included={!!inclusion.reminders[i]} onToggle={() => onToggle("reminders", i)}>
               <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{rem.title}</p>
               {rem.when && <p className="mt-0.5 text-xs text-neutral-400">{rem.when}</p>}
+            </PlanItem>
+          ))}
+        </PlanSection>
+      )}
+
+      {d.events.length > 0 && (
+        <PlanSection label="Create event placeholders">
+          {d.events.map((event, i) => (
+            <PlanItem key={i} included={!!inclusion.events[i]} onToggle={() => onToggle("events", i)}>
+              <EventPlaceholderCard event={event} />
             </PlanItem>
           ))}
         </PlanSection>
@@ -813,6 +837,28 @@ function PersonPlanCard({
             </div>
           ))}
         </div>
+      )}
+    </div>
+  );
+}
+
+function EventPlaceholderCard({ event }: { event: EventPlaceholderOutput }) {
+  const details = [
+    event.date && formatDate(event.date),
+    event.time,
+    event.location,
+    event.relatedPersonName && `with ${event.relatedPersonName}`,
+    event.needsReminder && "reminder on",
+  ].filter(Boolean);
+
+  return (
+    <div className="space-y-1">
+      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{event.title}</p>
+      {details.length > 0 && (
+        <p className="text-xs text-neutral-400">{details.join(" · ")}</p>
+      )}
+      {event.description && (
+        <p className="text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">{event.description}</p>
       )}
     </div>
   );
@@ -1057,6 +1103,7 @@ function SavedView({
     result.tasksCreated > 0 && `${result.tasksCreated} task${result.tasksCreated !== 1 ? "s" : ""} added`,
     result.ideasCreated > 0 && `${result.ideasCreated} idea${result.ideasCreated !== 1 ? "s" : ""} saved to Inbox`,
     result.remindersCreated > 0 && `${result.remindersCreated} reminder${result.remindersCreated !== 1 ? "s" : ""} added`,
+    result.eventPlaceholdersCreated > 0 && `${result.eventPlaceholdersCreated} event placeholder${result.eventPlaceholdersCreated !== 1 ? "s" : ""} created`,
     result.followUpsCreated > 0 && `${result.followUpsCreated} follow-up${result.followUpsCreated !== 1 ? "s" : ""} created`,
     result.activityLogsCreated > 0 && `${result.activityLogsCreated} activity log${result.activityLogsCreated !== 1 ? "s" : ""} created`,
     result.thoughtsSaved > 0 && `${result.thoughtsSaved} thought${result.thoughtsSaved !== 1 ? "s" : ""} saved`,

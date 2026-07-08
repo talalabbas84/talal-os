@@ -62,6 +62,7 @@ export const ACTION_TYPES = [
   "CREATE_IDEA",
   "CREATE_MEMORY",
   "CREATE_REMINDER",
+  "CREATE_EVENT_PLACEHOLDER",
   "CREATE_FOLLOW_UP",
   "CREATE_THOUGHT_UNIT",
   "CREATE_ACTIVITY_LOG",
@@ -100,6 +101,7 @@ export type PlannedAction =
   | { id: string; type: "CREATE_IDEA"; label: string; payload: IdeaPayload }
   | { id: string; type: "CREATE_MEMORY"; label: string; payload: MemoryPayload }
   | { id: string; type: "CREATE_REMINDER"; label: string; payload: ReminderPayload }
+  | { id: string; type: "CREATE_EVENT_PLACEHOLDER"; label: string; payload: EventPlaceholderPayload }
   | { id: string; type: "CREATE_FOLLOW_UP"; label: string; payload: FollowUpPayload }
   | { id: string; type: "CREATE_THOUGHT_UNIT"; label: string; payload: ThoughtUnitPayload }
   | { id: string; type: "CREATE_ACTIVITY_LOG"; label: string; payload: ActivityLogPayload }
@@ -162,6 +164,17 @@ export interface MemoryPayload {
 export interface ReminderPayload {
   title: string;
   when: string | null;
+}
+
+export interface EventPlaceholderPayload {
+  title: string;
+  description?: string | null;
+  date: string;
+  time?: string | null;
+  location?: string | null;
+  relatedPersonName?: string | null;
+  sourceCaptureId?: string | null;
+  needsReminder: boolean;
 }
 
 export interface FollowUpPayload {
@@ -576,6 +589,7 @@ export interface ExecutionResult {
   ideasCreated: number;
   memoriesSaved: number;
   remindersCreated: number;
+  eventPlaceholdersCreated: number;
   followUpsCreated: number;
   thoughtUnitsCreated: number;
   activityLogsCreated: number;

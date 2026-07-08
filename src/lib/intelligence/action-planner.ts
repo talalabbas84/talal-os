@@ -8,6 +8,7 @@ import type {
   IdeaPayload,
   MemoryPayload,
   ReminderPayload,
+  EventPlaceholderPayload,
   FollowUpPayload,
   ProjectPayload,
   PersonUpdatePayload,
@@ -39,6 +40,7 @@ export function planFromCapture(
     habits: boolean[];
     projects: boolean[];
     reminders: boolean[];
+    events: boolean[];
     memories: boolean[];
     commands: boolean[];
     people: boolean[];
@@ -86,6 +88,25 @@ export function planFromCapture(
       createdFrom: "CAPTURE",
     };
     actions.push({ id: nextId("followup"), type: "CREATE_FOLLOW_UP", label: `Follow-up: ${r.title}`, payload: followUpPayload });
+  });
+
+  d.events.forEach((event, i) => {
+    if (!inclusion.events[i] || !event.date) return;
+    const payload: EventPlaceholderPayload = {
+      title: event.title,
+      description: event.description || null,
+      date: event.date,
+      time: event.time,
+      location: event.location,
+      relatedPersonName: event.relatedPersonName,
+      needsReminder: event.needsReminder,
+    };
+    actions.push({
+      id: nextId("event"),
+      type: "CREATE_EVENT_PLACEHOLDER",
+      label: `Create event placeholder: ${event.title}`,
+      payload,
+    });
   });
 
   d.projects.forEach((p, i) => {

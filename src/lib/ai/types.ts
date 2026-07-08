@@ -10,6 +10,7 @@ export type {
   HabitOutput,
   ProjectOutput,
   ReminderOutput,
+  EventPlaceholderOutput,
   MemoryCandidateOutput,
   CommandOutput,
   Confidence,

@@ -67,6 +67,7 @@ export interface CreateSaveInput {
     habits: boolean[];
     projects: boolean[];
     reminders: boolean[];
+    events: boolean[];
     memories: boolean[];
     commands: boolean[];
     people: boolean[];

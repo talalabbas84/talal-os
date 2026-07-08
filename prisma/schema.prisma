@@ -36,6 +36,7 @@ model User {
   learningItems     LearningItem[]
   reviewSessions    ReviewSession[]
   activityLogs      ActivityLog[]
+  eventPlaceholders EventPlaceholder[]
   dayPulses         DayPulse[]
   people            Person[]
   personInteractions PersonInteraction[]
@@ -474,6 +475,29 @@ model ActivityLog {
   @@index([createdAt])
 }
 
+model EventPlaceholder {
+  id              String   @id @default(cuid())
+  title           String
+  description     String?
+  date            DateTime @db.Date
+  time            String?
+  location        String?
+  sourceCaptureId String?
+  needsReminder   Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  userId          String
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  relatedPersonId String?
+  relatedPerson   Person?  @relation(fields: [relatedPersonId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([date])
+  @@index([relatedPersonId])
+  @@index([createdAt])
+}
+
 model DayPulse {
   id           String         @id @default(cuid())
   scheduledFor DateTime
@@ -559,6 +583,7 @@ model Person {
   interactions PersonInteraction[]
   memories     PersonMemory[]
   insights     PersonInsight[]
+  events       EventPlaceholder[]
 
   @@index([userId])
   @@index([name])

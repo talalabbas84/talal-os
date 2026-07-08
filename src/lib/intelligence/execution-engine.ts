@@ -19,6 +19,7 @@ export async function executeActions(
     ideasCreated: 0,
     memoriesSaved: 0,
     remindersCreated: 0,
+    eventPlaceholdersCreated: 0,
     followUpsCreated: 0,
     thoughtUnitsCreated: 0,
     activityLogsCreated: 0,
@@ -134,6 +135,41 @@ export async function executeActions(
           },
         });
         result.remindersCreated++;
+        break;
+      }
+
+      case "CREATE_EVENT_PLACEHOLDER": {
+        const { payload } = action;
+        let relatedPersonId: string | null = null;
+
+        if (payload.relatedPersonName) {
+          const existingPerson = await prisma.person.findFirst({
+            where: { userId, name: { equals: payload.relatedPersonName, mode: "insensitive" } },
+          });
+          const person = existingPerson ?? await prisma.person.create({
+            data: {
+              userId,
+              name: payload.relatedPersonName,
+              notes: `Mentioned in planned event: ${payload.title}`,
+            },
+          });
+          relatedPersonId = person.id;
+        }
+
+        await prisma.eventPlaceholder.create({
+          data: {
+            userId,
+            title: payload.title,
+            description: payload.description ?? null,
+            date: new Date(`${payload.date}T00:00:00.000Z`),
+            time: payload.time ?? null,
+            location: payload.location ?? null,
+            relatedPersonId,
+            sourceCaptureId: payload.sourceCaptureId ?? null,
+            needsReminder: payload.needsReminder,
+          },
+        });
+        result.eventPlaceholdersCreated++;
         break;
       }
 

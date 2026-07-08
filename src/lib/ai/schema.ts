@@ -84,6 +84,17 @@ export const reminderOutputSchema = z.object({
   confidence: confidenceSchema.default("medium"),
 });
 
+export const eventPlaceholderOutputSchema = z.object({
+  title: z.string().min(1).max(255),
+  description: z.string().default(""),
+  date: z.string().nullable().default(null),
+  time: z.string().nullable().default(null),
+  location: z.string().nullable().default(null),
+  relatedPersonName: z.string().nullable().default(null),
+  needsReminder: z.boolean().default(true),
+  confidence: confidenceSchema.default("medium"),
+});
+
 export const memoryCandidateSchema = z.object({
   title: z.string().min(1).max(255),
   content: z.string().min(1),
@@ -199,6 +210,7 @@ export const captureDataSchema = z.object({
   habits: z.array(habitOutputSchema).default([]),
   projects: z.array(projectOutputSchema).default([]),
   reminders: z.array(reminderOutputSchema).default([]),
+  events: z.array(eventPlaceholderOutputSchema).default([]),
   memoryCandidates: z.array(memoryCandidateSchema).default([]),
   commands: z.array(commandOutputSchema).default([]),
   peopleUpdates: z.array(personUpdateSchema).default([]),
@@ -250,6 +262,7 @@ export type JournalOutput = z.infer<typeof journalOutputSchema>;
 export type HabitOutput = z.infer<typeof habitOutputSchema>;
 export type ProjectOutput = z.infer<typeof projectOutputSchema>;
 export type ReminderOutput = z.infer<typeof reminderOutputSchema>;
+export type EventPlaceholderOutput = z.infer<typeof eventPlaceholderOutputSchema>;
 export type MemoryCandidateOutput = z.infer<typeof memoryCandidateSchema>;
 export type CommandOutput = z.infer<typeof commandOutputSchema>;
 export type CaptureData = z.infer<typeof captureDataSchema>;

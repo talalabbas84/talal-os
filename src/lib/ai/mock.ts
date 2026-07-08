@@ -6,6 +6,7 @@ import type {
   HabitOutput,
   MemoryCandidateOutput,
   CommandOutput,
+  EventPlaceholderOutput,
   IntentResultOutput,
   RecommendationOutput,
   ReflectionResultOutput,
@@ -299,6 +300,50 @@ function extractMood(text: string, health?: string): string | undefined {
     if (lower.includes(word)) return mood;
   }
   return undefined;
+}
+
+function extractEventPlaceholders(text: string): EventPlaceholderOutput[] {
+  if (!/\b(dinner|lunch|coffee|meeting|meet|plan|class|appointment|call|date)\b/i.test(text)) return [];
+  const timeInfo = extractTimeInfo(text);
+  if (!timeInfo.dueDate) return [];
+
+  const personName = text.match(/\bwith\s+([A-Z][a-z]{1,30})\b/)?.[1] ?? null;
+  const kind =
+    /\bdinner\b/i.test(text) ? "Dinner" :
+    /\blunch\b/i.test(text) ? "Lunch" :
+    /\bcoffee\b/i.test(text) ? "Coffee" :
+    /\bdance class\b/i.test(text) ? "Dance class" :
+    /\bclass\b/i.test(text) ? "Class" :
+    /\bmeeting\b/i.test(text) ? "Meeting" :
+    /\bcall\b/i.test(text) ? "Call" :
+    /\bappointment\b/i.test(text) ? "Appointment" :
+    /\bdate\b/i.test(text) ? "Date" :
+    "Plan";
+  const relatedPersonName = personName && !EXCLUDED_NAMES.has(personName) ? personName : null;
+  const title = relatedPersonName ? `${kind} with ${relatedPersonName}` : kind;
+  const timeMatch = text.match(/\b(?:at|around)\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b/i);
+  let time = timeInfo.dueTime;
+
+  if (timeMatch?.[1]) {
+    let hour = Number(timeMatch[1]);
+    const minute = timeMatch[2] ?? "00";
+    const suffix = timeMatch[3]?.toLowerCase();
+    if (suffix === "pm" && hour < 12) hour += 12;
+    if (suffix === "am" && hour === 12) hour = 0;
+    if (!suffix && hour >= 1 && hour <= 7 && /\b(dinner|evening|night|after.+dance)\b/i.test(text)) hour += 12;
+    time = `${hour.toString().padStart(2, "0")}:${minute}`;
+  }
+
+  return [{
+    title,
+    description: /\bafter\b/i.test(text) ? "Includes after-context from capture." : "",
+    date: timeInfo.dueDate,
+    time,
+    location: null,
+    relatedPersonName,
+    needsReminder: true,
+    confidence: "high",
+  }];
 }
 
 function extractTasks(text: string): TaskOutput[] {
@@ -976,6 +1021,7 @@ export const mockProvider: AIProvider = {
     const memoryCandidates = extractMemoryCandidates(input);
     const commands = extractCommands(input);
     const peopleUpdates = extractPeopleUpdates(input, todayISO);
+    const events = extractEventPlaceholders(input);
 
     const improveTomorrow = tasks
       .filter((t) => t.dueDate === dateISO(1))
@@ -997,6 +1043,7 @@ export const mockProvider: AIProvider = {
       memoryCandidates.length > 0 && `${memoryCandidates.length} memory insight${memoryCandidates.length !== 1 ? "s" : ""} detected`,
       commands.length > 0 && `${commands.length} command${commands.length !== 1 ? "s" : ""} detected`,
       peopleUpdates.length > 0 && `${peopleUpdates.length} person update${peopleUpdates.length !== 1 ? "s" : ""} detected`,
+      events.length > 0 && `${events.length} event placeholder${events.length !== 1 ? "s" : ""} detected`,
     ].filter(Boolean).join(". ");
 
     return {
@@ -1011,6 +1058,7 @@ export const mockProvider: AIProvider = {
         habits,
         projects: [],
         reminders: [],
+        events,
         memoryCandidates,
         commands,
         peopleUpdates,

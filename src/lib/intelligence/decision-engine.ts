@@ -26,6 +26,7 @@ import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-learning-engine";
 import { planFromThoughtUnits, splitThoughts } from "./thought-splitter";
 import { planPersonalIntelligenceActions } from "./personal-intelligence";
+import { enrichCaptureRouting } from "./capture-routing-enricher";
 import type { PipelineResult, IntentResult } from "./types";
 import type { CaptureResult } from "@/lib/ai/types";
 
@@ -72,7 +73,7 @@ export async function processCapture(
   switch (intentResult.intent) {
     case "UPDATE": {
       // User is reporting completion or requesting changes to existing data
-      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
+      const capture = normalizeCapture(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       const commands = capture.data.commands;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       const thoughtLearningActions = planThoughtAndLearningFromCapture({
@@ -196,7 +197,7 @@ export async function processCapture(
 
     case "MEMORY": {
       // Pure memory extraction — no full organize
-      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
+      const capture = normalizeCapture(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       const candidates = capture.data.memoryCandidates;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       const thoughtLearningActions = planThoughtAndLearningFromCapture({
@@ -225,7 +226,7 @@ export async function processCapture(
     case "UNKNOWN":
     default: {
       // Full organize flow — returns rich structured data for the capture-view
-      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
+      const capture = normalizeCapture(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       // Default inclusion (all high/medium confidence included; projects opt-in; memories by importance)
       const d = capture.data;
       const defaultInclusion = {
@@ -234,6 +235,7 @@ export async function processCapture(
         habits: d.habits.map((h) => h.confidence !== "low"),
         projects: d.projects.map(() => false),
         reminders: d.reminders.map((r) => r.confidence !== "low"),
+        events: d.events.map((event) => event.confidence !== "low" && !!event.date),
         memories: d.memoryCandidates.map((m) => m.importance === "PERMANENT" || m.importance === "HIGH"),
         commands: d.commands.map((c) => c.confidence !== "low"),
         people: d.peopleUpdates.map((p) => p.confidence !== "low"),
@@ -279,6 +281,10 @@ function isStandaloneSmartShortcut(text: string): boolean {
   const lower = text.trim().toLowerCase();
   if (lower.length > 90) return false;
   return /\b(i am done|i'm done|im done|finished it|i finished it|done with it|not today|tomorrow|skip|later|reschedule|move it)\b/.test(lower);
+}
+
+function normalizeCapture(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
+  return enrichCaptureRouting(sanitizeHabitSignals(capture, rawText, articulatedText), rawText, articulatedText);
 }
 
 function sanitizeHabitSignals(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
