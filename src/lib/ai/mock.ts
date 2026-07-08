@@ -866,7 +866,7 @@ function classifyIntentMock(text: string): IntentResultOutput {
     return { intent: "CREATE", confidence: "medium", reason: `Person observation — extracting insights about ${personObsMatch[1]}` };
   }
 
-  return { intent: "CREATE", confidence: "medium", reason: "Defaulting to CREATE — no specific intent pattern matched" };
+  return { intent: "CREATE", confidence: "medium", reason: "General capture." };
 }
 
 // ── Recommendation ────────────────────────────────────────────────────────────

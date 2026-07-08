@@ -1,6 +1,5 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { z } from "zod";
-import { prisma } from "@/lib/prisma";
 import { buildPrompt } from "@/lib/prompts";
 import type { ArticulationResult, ExpressionScoreTrend, VocabularySuggestion } from "./types";
 
@@ -10,71 +9,33 @@ const vocabularySuggestionSchema = z.object({
   reason: z.string().default("More precise wording."),
 });
 
-const expressionScoreSchema = z.object({
+const understandingTrendSchema = z.object({
   clarity: z.string().default("Clear enough to route."),
   specificity: z.string().default("Specific details preserved."),
   vocabularyVariety: z.string().default("Simple vocabulary; no issue."),
   structure: z.string().default("Readable structure."),
 });
 
-const expressionSchema = z.object({
+const understandingSchema = z.object({
   articulated: z.string().min(1),
   improvedArticulation: z.string().min(1),
   vocabularySuggestions: z.array(vocabularySuggestionSchema).default([]),
   ambiguityNotes: z.array(z.string()).default([]),
   clarificationQuestion: z.string().nullable().default(null),
-  explanation: z.string().default("The rewrite is clearer while preserving the original meaning."),
-  expressionScore: expressionScoreSchema.default({
+  explanation: z.string().default("Internal understanding preserved the original meaning."),
+  expressionScore: understandingTrendSchema.default({
     clarity: "Clear enough to route.",
     specificity: "Specific details preserved.",
     vocabularyVariety: "Simple vocabulary; no issue.",
     structure: "Readable structure.",
   }),
   confidence: z.enum(["high", "medium", "low"]).default("medium"),
-  notes: z.string().default("Expression Brain processed the capture."),
+  notes: z.string().default("Understanding Engine processed the capture."),
 });
 
-type ExpressionOutput = z.infer<typeof expressionSchema>;
+type UnderstandingOutput = z.infer<typeof understandingSchema>;
 
-const SIMPLE_WORDS: Record<string, VocabularySuggestion> = {
-  nice: {
-    original: "nice",
-    suggestions: ["rewarding", "meaningful", "uplifting", "engaging"],
-    reason: "These words explain what kind of positive experience it was.",
-  },
-  good: {
-    original: "good",
-    suggestions: ["useful", "strong", "effective", "encouraging"],
-    reason: "These alternatives make the positive quality more specific.",
-  },
-  bad: {
-    original: "bad",
-    suggestions: ["frustrating", "draining", "ineffective", "disappointing"],
-    reason: "These alternatives clarify what felt negative.",
-  },
-  tired: {
-    original: "tired",
-    suggestions: ["drained", "low-energy", "fatigued", "depleted"],
-    reason: "These words separate normal tiredness from deeper energy loss.",
-  },
-  happy: {
-    original: "happy",
-    suggestions: ["energized", "content", "excited", "relieved"],
-    reason: "These options describe the emotional flavor more precisely.",
-  },
-  sad: {
-    original: "sad",
-    suggestions: ["discouraged", "heavy", "lonely", "disappointed"],
-    reason: "These options make the emotional signal more specific.",
-  },
-  thing: {
-    original: "thing",
-    suggestions: ["task", "issue", "idea", "commitment"],
-    reason: "Naming the kind of thing reduces ambiguity.",
-  },
-};
-
-export async function runExpressionBrain(input: string, userId?: string): Promise<ArticulationResult> {
+export async function runUnderstandingEngine(input: string): Promise<ArticulationResult> {
   const original = input.trim();
   if (!original) {
     return toArticulation(original, {
@@ -90,28 +51,22 @@ export async function runExpressionBrain(input: string, userId?: string): Promis
     });
   }
 
-  const repeatedSimpleWords = userId ? await getRepeatedSimpleWords(userId) : [];
-  const output = await runLiveExpression(original, repeatedSimpleWords).catch(() =>
-    heuristicExpression(original, repeatedSimpleWords),
+  const output = await runLiveUnderstanding(original).catch(() =>
+    heuristicUnderstanding(original),
   );
 
   return toArticulation(original, output);
 }
 
-async function runLiveExpression(input: string, repeatedSimpleWords: string[]): Promise<ExpressionOutput> {
+async function runLiveUnderstanding(input: string): Promise<UnderstandingOutput> {
   if (!process.env.GEMINI_API_KEY) {
-    return heuristicExpression(input, repeatedSimpleWords);
+    return heuristicUnderstanding(input);
   }
 
   const prompt = buildPrompt({
-    brain: "expression",
+    brain: "understanding",
     userInput: input,
-    context: [
-      "This is the first stage of the capture pipeline. Improve expression only. Do not classify, plan, or execute.",
-      repeatedSimpleWords.length
-        ? `Repeated simple words to coach gently: ${repeatedSimpleWords.join(", ")}.`
-        : "No repeated simple-word pattern is known yet.",
-    ].join("\n"),
+    context: "This is the first stage of the capture pipeline. Understand only. Do not classify, plan, coach grammar, or expose reasoning.",
   });
 
   const client = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
@@ -123,28 +78,27 @@ async function runLiveExpression(input: string, repeatedSimpleWords: string[]): 
 
   const result = await model.generateContent(prompt.userPrompt);
   const raw = stripMarkdown(result.response.text());
-  const parsed = expressionSchema.safeParse(JSON.parse(raw));
+  const parsed = understandingSchema.safeParse(JSON.parse(raw));
 
-  return parsed.success ? parsed.data : heuristicExpression(input, repeatedSimpleWords);
+  return parsed.success ? parsed.data : heuristicUnderstanding(input);
 }
 
-function heuristicExpression(input: string, repeatedSimpleWords: string[]): ExpressionOutput {
+function heuristicUnderstanding(input: string): UnderstandingOutput {
   const normalized = normalizeSpacing(input);
   const articulated = normalizeArticulation(structureKnownCapture(normalized), normalized);
   const improvedArticulation = improveArticulation(articulated);
   const ambiguityNotes = detectAmbiguity(normalized);
-  const vocabularySuggestions = suggestVocabulary(normalized, repeatedSimpleWords);
 
   return {
     articulated,
     improvedArticulation,
-    vocabularySuggestions,
+    vocabularySuggestions: [],
     ambiguityNotes,
     clarificationQuestion: buildClarifyingQuestion(normalized, ambiguityNotes),
-    explanation: buildExplanation(normalized, articulated, improvedArticulation),
-    expressionScore: scoreExpression(normalized, articulated, vocabularySuggestions, ambiguityNotes),
+    explanation: "Internal understanding normalized the capture without changing meaning.",
+    expressionScore: scoreExpression(normalized, articulated, [], ambiguityNotes),
     confidence: articulated === sentenceCase(normalized) ? "high" : "medium",
-    notes: "Expression Brain used conservative local coaching because live expression was unavailable.",
+    notes: "Understanding Engine used conservative local normalization.",
   };
 }
 
@@ -195,16 +149,8 @@ function detectAmbiguity(input: string): string[] {
   const lower = input.toLowerCase();
   const notes: string[] = [];
 
-  if (/\bdinner with\b/.test(lower) && !/\bremind me|reminder|calendar|schedule|add\b/.test(lower)) {
-    notes.push("It is unclear whether this dinner should become a task, reminder, calendar-style commitment, or just context.");
-  }
-
-  if (/\bthis\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/.test(lower)) {
-    notes.push("The weekday is clear, but the exact date depends on today's date.");
-  }
-
-  if (/\bmaybe|idk|not sure\b/.test(lower)) {
-    notes.push("The capture includes uncertainty that should be preserved.");
+  if (/\bwhich\s+(sarah|sara|michael|micheal|person|one)\b/.test(lower) || /\bnot sure who\b/.test(lower)) {
+    notes.push("A person reference is ambiguous.");
   }
 
   return notes;
@@ -214,28 +160,11 @@ function buildClarifyingQuestion(input: string, ambiguityNotes: string[]): strin
   if (ambiguityNotes.length === 0) return null;
   const lower = input.toLowerCase();
 
-  if (/\bdinner with\b/.test(lower)) {
-    return "Do you want this dinner saved as a reminder/task, or is it just context?";
+  if (/\bwhich\s+(sarah|sara|michael|micheal|person|one)\b/.test(lower) || /\bnot sure who\b/.test(lower)) {
+    return "Which person did you mean?";
   }
 
-  return "What detail would make this easier to act on later?";
-}
-
-function suggestVocabulary(input: string, repeatedSimpleWords: string[]): VocabularySuggestion[] {
-  const lower = input.toLowerCase();
-  const suggestions: VocabularySuggestion[] = [];
-  const seen = new Set<string>();
-
-  for (const word of Object.keys(SIMPLE_WORDS)) {
-    const repeated = repeatedSimpleWords.includes(word);
-    const present = new RegExp(`\\b${word}\\b`, "i").test(lower);
-    if (!present && !repeated) continue;
-    if (seen.has(word)) continue;
-    suggestions.push(SIMPLE_WORDS[word]!);
-    seen.add(word);
-  }
-
-  return suggestions.slice(0, 3);
+  return null;
 }
 
 function scoreExpression(
@@ -256,17 +185,7 @@ function scoreExpression(
   };
 }
 
-function buildExplanation(original: string, articulated: string, improved: string): string {
-  if (articulated !== improved) {
-    return "The rewrite preserves the original details, fixes wording, and separates timing/context so downstream routing is less likely to misread it.";
-  }
-  if (original !== articulated) {
-    return "The rewrite cleans up grammar and spacing while preserving the original meaning.";
-  }
-  return "The thought was already understandable, so only light normalization was needed.";
-}
-
-function toArticulation(original: string, output: ExpressionOutput): ArticulationResult {
+function toArticulation(original: string, output: UnderstandingOutput): ArticulationResult {
   const articulated = normalizeArticulation(output.articulated, original);
   const improvedArticulation = normalizeArticulation(output.improvedArticulation, articulated);
 
@@ -283,29 +202,6 @@ function toArticulation(original: string, output: ExpressionOutput): Articulatio
     changed: articulated !== original || improvedArticulation !== original,
     notes: output.notes,
   };
-}
-
-async function getRepeatedSimpleWords(userId: string): Promise<string[]> {
-  const recent = await prisma.expressionRewrite.findMany({
-    where: { userId },
-    orderBy: { createdAt: "desc" },
-    take: 25,
-    select: { rawText: true },
-  });
-
-  const counts = new Map<string, number>();
-  for (const item of recent) {
-    const lower = item.rawText.toLowerCase();
-    for (const word of Object.keys(SIMPLE_WORDS)) {
-      if (new RegExp(`\\b${word}\\b`, "i").test(lower)) {
-        counts.set(word, (counts.get(word) ?? 0) + 1);
-      }
-    }
-  }
-
-  return Array.from(counts.entries())
-    .filter(([, count]) => count >= 2)
-    .map(([word]) => word);
 }
 
 function defaultScore(): ExpressionScoreTrend {

@@ -1,6 +1,6 @@
 export type BrainName =
   | "articulation"
-  | "expression"
+  | "understanding"
   | "decision"
   | "planning"
   | "reflection"

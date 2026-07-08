@@ -141,14 +141,14 @@ export function planFromCommands(commands: CommandOutput[]): PlannedAction[] {
   return commands.flatMap(planFromCommand);
 }
 
-export function planFromExpressionCoach(articulation: ArticulationResult): PlannedAction[] {
+export function planFromUnderstanding(articulation: ArticulationResult): PlannedAction[] {
   if (!articulation.original.trim() || !articulation.improvedArticulation.trim()) return [];
 
   return [
     {
       id: nextId("expr"),
       type: "CREATE_EXPRESSION_REWRITE",
-      label: "Store expression rewrite",
+      label: "Store capture understanding",
       payload: {
         rawText: articulation.original,
         articulatedText: articulation.articulated,
@@ -162,7 +162,7 @@ export function planFromExpressionCoach(articulation: ArticulationResult): Plann
     {
       id: nextId("expr-trend"),
       type: "CREATE_EXPRESSION_TREND",
-      label: "Track expression trend",
+      label: "Track capture understanding",
       payload: {
         ...articulation.expressionScore,
         notes: articulation.notes,

@@ -3,29 +3,15 @@
 import { useState, useTransition } from "react";
 import {
   Sparkles,
-  ListTodo,
-  Lightbulb,
-  BookOpen,
-  Repeat2,
-  FolderPlus,
-  Bell,
-  Brain,
-  Zap,
   Loader2,
   AlertCircle,
   CheckCircle2,
-  RotateCcw,
   Pencil,
   X,
-  HelpCircle,
-  TrendingUp,
-  CalendarDays,
-  Activity,
-  Users,
 } from "lucide-react";
 import { processCapture, saveApprovedActions, saveCreateCapture } from "../actions/capture.actions";
 import type { PipelineResult, PlannedAction, ExecutionResult } from "@/lib/intelligence/types";
-import type { TaskOutput, IdeaOutput, HabitOutput, ProjectOutput, ReminderOutput, MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
+import type { MemoryCandidateOutput, PersonUpdateOutput } from "@/lib/ai/types";
 import { TYPE_LABELS, IMPORTANCE_STYLES } from "@/features/memory/components/memory-view";
 import { cn } from "@/utils/cn";
 
@@ -223,6 +209,7 @@ export function CaptureView({ userName, initialText = "" }: { userName: string; 
           onMemorySaveEdit={handleMemorySaveEdit}
           onEdit={handleRetry}
           onSave={handleSave}
+          onCancel={handleReset}
           isSaving={isSaving}
           error={error}
         />
@@ -251,7 +238,7 @@ function InputView({
           What&apos;s on your mind, {firstName}?
         </h1>
         <p className="mt-1 text-sm text-neutral-500 dark:text-neutral-400">
-          Just talk. Tasks, decisions, feelings, questions — the system decides what to do.
+          Just talk. Tasks, decisions, feelings, questions — I&apos;ll sort it out.
         </p>
       </div>
 
@@ -289,7 +276,7 @@ function InputView({
         {isProcessing ? (
           <><Loader2 className="h-4 w-4 animate-spin" />Processing…</>
         ) : (
-          <><Sparkles className="h-4 w-4" />Process</>
+          <><Sparkles className="h-4 w-4" />Continue</>
         )}
       </button>
     </div>
@@ -301,7 +288,7 @@ function InputView({
 function PreviewView({
   result, createInclusion, actionInclusion,
   onToggleCreate, onToggleCreateJournal, onTogglePersonInsight, onToggleAction, onMemorySaveEdit,
-  onEdit, onSave, isSaving, error,
+  onEdit, onSave, onCancel, isSaving, error,
 }: {
   result: PipelineResult;
   createInclusion: CreateInclusion | null;
@@ -313,6 +300,7 @@ function PreviewView({
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
   onEdit: () => void;
   onSave: () => void;
+  onCancel: () => void;
   isSaving: boolean;
   error: string | null;
 }) {
@@ -331,72 +319,79 @@ function PreviewView({
     ? actionInclusion.filter(Boolean).length
     : 0;
 
+  const isQuestion = result.intent === "QUESTION";
+  const canSave = isQuestion || selectedCount > 0;
   return (
     <div className="space-y-4">
-      {/* Intent badge */}
-      <IntentBadge intentResult={result.intentResult} />
+      <PreviewBlock title="I understood">
+        <UnderstandingText result={result} />
+      </PreviewBlock>
 
-      <ArticulationPanel articulation={result.articulation} />
+      <PreviewBlock title="I'll do this">
+        {(result.intent === "CREATE" || result.intent === "UNKNOWN") && createInclusion && (
+          <AssistantPlanView
+            capture={result.capture}
+            inclusion={createInclusion}
+            onToggle={onToggleCreate}
+            onToggleJournal={onToggleCreateJournal}
+            onTogglePersonInsight={onTogglePersonInsight}
+            onMemorySaveEdit={onMemorySaveEdit}
+          />
+        )}
 
-      {/* Intent-specific preview */}
-      {(result.intent === "CREATE" || result.intent === "UNKNOWN") && createInclusion && (
-        <CreatePreview
-          capture={result.capture}
-          inclusion={createInclusion}
-          onToggle={onToggleCreate}
-          onToggleJournal={onToggleCreateJournal}
-          onTogglePersonInsight={onTogglePersonInsight}
-          onMemorySaveEdit={onMemorySaveEdit}
-        />
-      )}
+        {result.intent === "UPDATE" && actionInclusion && (
+          <UpdatePlanView
+            actions={result.actions}
+            actionInclusion={actionInclusion}
+            onToggleAction={onToggleAction}
+          />
+        )}
 
-      {result.intent === "UPDATE" && actionInclusion && (
-        <UpdatePreview
-          commands={result.commands}
-          actions={result.actions}
-          actionInclusion={actionInclusion}
-          onToggleAction={onToggleAction}
-        />
-      )}
+        {result.intent === "DECISION" && (
+          <DecisionPlanView
+            recommendation={result.recommendation}
+            actions={result.actions}
+            actionInclusion={actionInclusion ?? []}
+            onToggleAction={onToggleAction}
+          />
+        )}
 
-      {result.intent === "DECISION" && (
-        <DecisionPreview
-          recommendation={result.recommendation}
-          actions={result.actions}
-          actionInclusion={actionInclusion ?? []}
-          onToggleAction={onToggleAction}
-        />
-      )}
+        {(result.intent === "REFLECTION" || result.intent === "JOURNAL") && (
+          <ReflectionPlanView
+            reflectionData={result.reflectionData}
+            actions={result.actions}
+            actionInclusion={actionInclusion ?? []}
+            onToggleAction={onToggleAction}
+          />
+        )}
 
-      {(result.intent === "REFLECTION" || result.intent === "JOURNAL") && (
-        <ReflectionPreview
-          reflectionData={result.reflectionData}
-          actions={result.actions}
-          actionInclusion={actionInclusion ?? []}
-          onToggleAction={onToggleAction}
-        />
-      )}
+        {result.intent === "QUESTION" && (
+          <QuestionView answer={result.answer} />
+        )}
 
-      {result.intent === "QUESTION" && (
-        <QuestionPreview answer={result.answer} />
-      )}
+        {result.intent === "PLAN" && (
+          <DailyPlanView
+            plan={result.plan}
+            actions={result.actions}
+            actionInclusion={actionInclusion ?? []}
+            onToggleAction={onToggleAction}
+          />
+        )}
 
-      {result.intent === "PLAN" && (
-        <PlanPreview
-          plan={result.plan}
-          actions={result.actions}
-          actionInclusion={actionInclusion ?? []}
-          onToggleAction={onToggleAction}
-        />
-      )}
+        {result.intent === "MEMORY" && actionInclusion && (
+          <MemoryPlanView
+            candidates={result.candidates}
+            actionInclusion={actionInclusion}
+            onToggleAction={onToggleAction}
+            onMemorySaveEdit={onMemorySaveEdit}
+          />
+        )}
+      </PreviewBlock>
 
-      {result.intent === "MEMORY" && actionInclusion && (
-        <MemoryPreview
-          candidates={result.candidates}
-          actionInclusion={actionInclusion}
-          onToggleAction={onToggleAction}
-          onMemorySaveEdit={onMemorySaveEdit}
-        />
+      {result.articulation?.clarificationQuestion && (
+        <PreviewBlock title="One question">
+          <ClarificationBlock question={result.articulation.clarificationQuestion} />
+        </PreviewBlock>
       )}
 
       {error && (
@@ -407,10 +402,10 @@ function PreviewView({
       )}
 
       {/* Actions */}
-      <div className="flex gap-3 pt-1">
+      <div className="flex items-center gap-3 pt-1">
         <button
           onClick={onSave}
-          disabled={isSaving || (result.intent !== "QUESTION" && selectedCount === 0)}
+          disabled={isSaving || !canSave}
           className={cn(
             "flex flex-1 items-center justify-center gap-2 rounded-xl px-4 py-3 text-sm font-medium transition-colors",
             "bg-neutral-900 text-white hover:bg-neutral-700",
@@ -420,178 +415,114 @@ function PreviewView({
         >
           {isSaving ? (
             <><Loader2 className="h-4 w-4 animate-spin" />Saving…</>
-          ) : result.intent === "QUESTION" ? (
-            <><CheckCircle2 className="h-4 w-4" />Done</>
           ) : (
-            <>
-              <CheckCircle2 className="h-4 w-4" />
-              {result.intent === "DECISION" ? "Apply" : "Approve & Save"}
-              {selectedCount > 0 && (
-                <span className="ml-1 rounded-full bg-white/20 px-1.5 py-0.5 text-xs dark:bg-black/20">
-                  {selectedCount}
-                </span>
-              )}
-            </>
+            <><CheckCircle2 className="h-4 w-4" />Looks Good</>
           )}
         </button>
         <button
           onClick={onEdit}
           disabled={isSaving}
-          className="flex items-center gap-2 rounded-xl border border-neutral-200 px-4 py-3 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
+          className="flex items-center justify-center rounded-xl border border-neutral-200 px-4 py-3 text-sm font-medium text-neutral-600 transition-colors hover:bg-neutral-50 disabled:opacity-40 dark:border-neutral-700 dark:text-neutral-400 dark:hover:bg-neutral-800"
         >
-          <RotateCcw className="h-3.5 w-3.5" />
-          Edit
+          Make One Change
+        </button>
+        <button
+          onClick={onCancel}
+          disabled={isSaving}
+          className="flex items-center justify-center px-3 py-3 text-sm text-neutral-400 transition-colors hover:text-neutral-600 disabled:opacity-40 dark:hover:text-neutral-300"
+        >
+          Cancel
         </button>
       </div>
     </div>
   );
 }
 
-// ── Intent badge ──────────────────────────────────────────────────────────────
+// ── Invisible preview primitives ──────────────────────────────────────────────
 
-const INTENT_META: Record<string, { label: string; icon: React.ElementType; color: string }> = {
-  CREATE:     { label: "Creating",    icon: ListTodo,     color: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300" },
-  UPDATE:     { label: "Updating",    icon: Zap,          color: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300" },
-  MEMORY:     { label: "Memory",      icon: Brain,        color: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-300" },
-  DECISION:   { label: "Decision",    icon: TrendingUp,   color: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300" },
-  PLAN:       { label: "Planning",    icon: CalendarDays, color: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300" },
-  QUESTION:   { label: "Question",    icon: HelpCircle,   color: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400" },
-  REFLECTION: { label: "Reflection",  icon: Activity,     color: "bg-pink-50 text-pink-700 dark:bg-pink-950 dark:text-pink-300" },
-  JOURNAL:    { label: "Journal",     icon: BookOpen,     color: "bg-teal-50 text-teal-700 dark:bg-teal-950 dark:text-teal-300" },
-  UNKNOWN:    { label: "Processing",  icon: Sparkles,     color: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800" },
-};
-
-function IntentBadge({ intentResult }: { intentResult: { intent: string; confidence: string; reason: string } }) {
-  const meta = INTENT_META[intentResult.intent] ?? INTENT_META["UNKNOWN"]!;
-  const Icon = meta.icon;
+function PreviewBlock({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-2">
-      <span className={cn("flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium", meta.color)}>
-        <Icon className="h-3 w-3" />
-        {meta.label}
-      </span>
-      {intentResult.confidence !== "high" && (
-        <span className="text-xs text-neutral-400">{intentResult.reason}</span>
-      )}
+    <section className="space-y-2">
+      <h2 className="text-xs font-medium uppercase tracking-wider text-neutral-400">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
+function UnderstandingText({ result }: { result: PipelineResult }) {
+  const understanding = buildUnderstanding(result);
+  return (
+    <p className="rounded-xl border border-neutral-200 bg-white px-4 py-3 text-sm leading-relaxed text-neutral-700 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-300">
+      {understanding}
+    </p>
+  );
+}
+
+function buildUnderstanding(result: PipelineResult): string {
+  const text = result.articulation?.articulated?.trim();
+  if (text) return text;
+
+  if (result.intent === "DECISION") return result.recommendation.summary;
+  if (result.intent === "QUESTION") return "You asked a question.";
+  if (result.intent === "PLAN") return "You want a plan.";
+  if (result.intent === "MEMORY") return "You shared something worth remembering.";
+  if (result.intent === "REFLECTION" || result.intent === "JOURNAL") return result.reflectionData.reflection;
+
+  return "I understood your capture.";
+}
+
+function ClarificationBlock({ question }: { question: string }) {
+  return (
+    <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 dark:border-amber-900 dark:bg-amber-950/30">
+      <p className="text-sm leading-relaxed text-amber-900 dark:text-amber-100">{question}</p>
     </div>
   );
 }
 
-function ArticulationPanel({
-  articulation,
+// ── Shared plan primitives ────────────────────────────────────────────────────
+
+function PlanSection({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="px-4 pb-1 pt-3 text-[11px] font-medium uppercase tracking-wider text-neutral-400">{label}</p>
+      {children}
+    </div>
+  );
+}
+
+function PlanItem({
+  included, onToggle, children,
 }: {
-  articulation: PipelineResult["articulation"];
+  included: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
 }) {
   return (
-    <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">
-            AI Understanding
-          </span>
-        </div>
-        <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-medium uppercase text-neutral-500 dark:bg-neutral-800">
-          {articulation.confidence}
-        </span>
-      </div>
-
-      <div className="space-y-2">
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Original Capture
-          </p>
-          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm leading-relaxed text-neutral-600 dark:bg-neutral-950 dark:text-neutral-400">
-            {articulation.original}
-          </p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            AI Understanding
-          </p>
-          <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm font-medium leading-relaxed text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50">
-            {articulation.articulated}
-          </p>
-        </div>
-
-        <div>
-          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Improved Articulation
-          </p>
-          <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-medium leading-relaxed text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
-            {articulation.improvedArticulation}
-          </p>
-          {articulation.explanation && (
-            <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
-              {articulation.explanation}
-            </p>
-          )}
-        </div>
-      </div>
-
-      {articulation.vocabularySuggestions.length > 0 && (
-        <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-950">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Vocabulary Suggestions
-          </p>
-          <div className="space-y-2">
-            {articulation.vocabularySuggestions.map((item) => (
-              <div key={item.original} className="text-xs leading-5 text-neutral-600 dark:text-neutral-300">
-                <span className="font-medium text-neutral-900 dark:text-neutral-50">{item.original}</span>
-                {" → "}
-                <span>{item.suggestions.join(", ")}</span>
-                {item.reason && <p className="text-neutral-400">{item.reason}</p>}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {(articulation.ambiguityNotes.length > 0 || articulation.clarificationQuestion) && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
-          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-amber-700 dark:text-amber-300">
-            Clarification
-          </p>
-          {articulation.ambiguityNotes.map((note) => (
-            <p key={note} className="text-xs leading-5 text-amber-800 dark:text-amber-200">
-              {note}
-            </p>
-          ))}
-          {articulation.clarificationQuestion && (
-            <p className="mt-2 text-sm font-medium leading-6 text-amber-950 dark:text-amber-100">
-              {articulation.clarificationQuestion}
-            </p>
-          )}
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        <ExpressionSignal label="Clarity" value={articulation.expressionScore.clarity} />
-        <ExpressionSignal label="Specificity" value={articulation.expressionScore.specificity} />
-        <ExpressionSignal label="Vocabulary" value={articulation.expressionScore.vocabularyVariety} />
-        <ExpressionSignal label="Structure" value={articulation.expressionScore.structure} />
-      </div>
-
-      {articulation.notes && (
-        <p className="text-xs text-neutral-400">{articulation.notes}</p>
-      )}
+    <div className={cn("flex items-start gap-3 px-4 py-2.5 transition-opacity", !included && "opacity-40")}>
+      <button
+        onClick={onToggle}
+        className={cn(
+          "mt-0.5 h-4 w-4 shrink-0 rounded border transition-colors",
+          included
+            ? "border-neutral-900 bg-neutral-900 dark:border-neutral-50 dark:bg-neutral-50"
+            : "border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900",
+        )}
+        aria-label={included ? "Exclude" : "Include"}
+      >
+        {included && (
+          <svg viewBox="0 0 16 16" fill="none" className="h-full w-full p-0.5">
+            <path d="M3 8l3.5 3.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        )}
+      </button>
+      <div className="min-w-0 flex-1">{children}</div>
     </div>
   );
 }
 
-function ExpressionSignal({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
-      <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">{label}</p>
-      <p className="mt-0.5 text-xs leading-5 text-neutral-600 dark:text-neutral-300">{value}</p>
-    </div>
-  );
-}
+// ── CREATE — assistant plan view ──────────────────────────────────────────────
 
-// ── CREATE preview ────────────────────────────────────────────────────────────
-
-function CreatePreview({
+function AssistantPlanView({
   capture, inclusion, onToggle, onToggleJournal, onTogglePersonInsight, onMemorySaveEdit,
 }: {
   capture: import("@/lib/ai/types").CaptureResult;
@@ -602,154 +533,223 @@ function CreatePreview({
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
 }) {
   const d = capture.data;
+  const hasContent =
+    d.tasks.length > 0 || d.ideas.length > 0 || d.habits.length > 0 ||
+    d.projects.length > 0 || d.reminders.length > 0 || d.memoryCandidates.length > 0 ||
+    d.commands.length > 0 || d.peopleUpdates.length > 0 ||
+    !!(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow || d.journal.distractedBy);
+
+  if (!hasContent) {
+    return (
+      <p className="py-2 text-sm text-neutral-400">
+        Nothing specific to add — just logging your capture.
+      </p>
+    );
+  }
+
   return (
-    <div className="space-y-4">
-      {/* AI Reflection */}
-      <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-3 flex items-center gap-2">
-          <Sparkles className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">AI</span>
-        </div>
-        <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{capture.reflection}</p>
-        {(d.mood || d.healthStatus) && (
-          <div className="mt-3 flex flex-wrap gap-2">
-            {d.mood && <Chip color="blue">{d.mood}</Chip>}
-            {d.healthStatus && <Chip color="amber">{d.healthStatus}</Chip>}
-          </div>
-        )}
-      </div>
-
+    <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
       {d.tasks.length > 0 && (
-        <Section icon={ListTodo} title="Tasks" count={d.tasks.length}>
+        <PlanSection label="Create tasks">
           {d.tasks.map((task, i) => (
-            <ItemRow key={i} included={!!inclusion.tasks[i]} onToggle={() => onToggle("tasks", i)} confidence={task.confidence}>
-              <TaskCard task={task} />
-            </ItemRow>
+            <PlanItem key={i} included={!!inclusion.tasks[i]} onToggle={() => onToggle("tasks", i)}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{task.title}</p>
+              {(task.dueDate || task.dueTime || task.timeContext) && (
+                <p className="mt-0.5 text-xs text-neutral-400">
+                  {[task.dueDate && formatDate(task.dueDate), task.dueTime, !task.dueDate && task.timeContext?.replace(/_/g, " ")].filter(Boolean).join(" · ")}
+                </p>
+              )}
+            </PlanItem>
           ))}
-        </Section>
-      )}
-
-      {d.ideas.length > 0 && (
-        <Section icon={Lightbulb} title="Ideas" count={d.ideas.length} note="→ Inbox">
-          {d.ideas.map((idea, i) => (
-            <ItemRow key={i} included={!!inclusion.ideas[i]} onToggle={() => onToggle("ideas", i)} confidence={idea.confidence}>
-              <IdeaCard idea={idea} />
-            </ItemRow>
-          ))}
-        </Section>
-      )}
-
-      {(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow || d.journal.distractedBy) && (
-        <Section icon={BookOpen} title="Daily Log" note="→ Today's entry">
-          <ItemRow included={inclusion.journal} onToggle={onToggleJournal} confidence="high">
-            <JournalCard journal={d.journal} />
-          </ItemRow>
-        </Section>
-      )}
-
-      {d.habits.length > 0 && (
-        <Section icon={Repeat2} title="Habits" note="Matched to existing habits">
-          {d.habits.map((habit, i) => (
-            <ItemRow key={i} included={!!inclusion.habits[i]} onToggle={() => onToggle("habits", i)} confidence={habit.confidence}>
-              <HabitCard habit={habit} />
-            </ItemRow>
-          ))}
-        </Section>
-      )}
-
-      {d.projects.length > 0 && (
-        <Section icon={FolderPlus} title="Projects" note="Opt-in">
-          {d.projects.map((project, i) => (
-            <ItemRow key={i} included={!!inclusion.projects[i]} onToggle={() => onToggle("projects", i)} confidence={project.confidence} alwaysShowToggle>
-              <ProjectCard project={project} />
-            </ItemRow>
-          ))}
-        </Section>
-      )}
-
-      {d.reminders.length > 0 && (
-        <Section icon={Bell} title="Reminders" note="→ Inbox">
-          {d.reminders.map((reminder, i) => (
-            <ItemRow key={i} included={!!inclusion.reminders[i]} onToggle={() => onToggle("reminders", i)} confidence={reminder.confidence}>
-              <ReminderCard reminder={reminder} />
-            </ItemRow>
-          ))}
-        </Section>
-      )}
-
-      {d.memoryCandidates.length > 0 && (
-        <Section icon={Brain} title="Possible Memories" count={d.memoryCandidates.length} note="→ Memory Vault">
-          {d.memoryCandidates.map((candidate, i) => (
-            <ItemRow key={i} included={!!inclusion.memories[i]} onToggle={() => onToggle("memories", i)} confidence="high" alwaysShowToggle>
-              <MemoryCandidateCard candidate={candidate} index={i} onSaveEdit={onMemorySaveEdit} />
-            </ItemRow>
-          ))}
-        </Section>
+        </PlanSection>
       )}
 
       {d.commands.length > 0 && (
-        <Section icon={Zap} title="Detected Actions" count={d.commands.length} note="Executes against existing data">
+        <PlanSection label="Update progress">
           {d.commands.map((cmd, i) => (
-            <ItemRow key={i} included={!!inclusion.commands[i]} onToggle={() => onToggle("commands", i)} confidence={cmd.confidence} alwaysShowToggle>
-              <div>
-                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">
-                  {cmd.type === "COMPLETE_TASK" ? `Done: ${cmd.target}`
-                    : cmd.type === "COMPLETE_HABIT" ? `Habit: ${cmd.target}`
-                    : cmd.type === "RESCHEDULE_TASK" ? `Reschedule: ${cmd.target}${cmd.details ? ` → ${cmd.details}` : ""}`
-                    : `Reminder: ${cmd.target}`}
-                </p>
-              </div>
-            </ItemRow>
+            <PlanItem key={i} included={!!inclusion.commands[i]} onToggle={() => onToggle("commands", i)}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">
+                {cmd.type === "COMPLETE_TASK" ? `✓ ${cmd.target}`
+                  : cmd.type === "COMPLETE_HABIT" ? `✓ ${cmd.target}`
+                  : cmd.type === "RESCHEDULE_TASK" ? `Move: ${cmd.target}${cmd.details ? ` → ${cmd.details}` : ""}`
+                  : `Remind: ${cmd.target}`}
+              </p>
+            </PlanItem>
           ))}
-        </Section>
+        </PlanSection>
+      )}
+
+      {d.reminders.length > 0 && (
+        <PlanSection label="Create reminders">
+          {d.reminders.map((rem, i) => (
+            <PlanItem key={i} included={!!inclusion.reminders[i]} onToggle={() => onToggle("reminders", i)}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{rem.title}</p>
+              {rem.when && <p className="mt-0.5 text-xs text-neutral-400">{rem.when}</p>}
+            </PlanItem>
+          ))}
+        </PlanSection>
+      )}
+
+      {d.ideas.length > 0 && (
+        <PlanSection label="Save ideas">
+          {d.ideas.map((idea, i) => (
+            <PlanItem key={i} included={!!inclusion.ideas[i]} onToggle={() => onToggle("ideas", i)}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{idea.title}</p>
+            </PlanItem>
+          ))}
+        </PlanSection>
+      )}
+
+      {d.habits.length > 0 && (
+        <PlanSection label="Update habits">
+          {d.habits.map((habit, i) => (
+            <PlanItem key={i} included={!!inclusion.habits[i]} onToggle={() => onToggle("habits", i)}>
+              <div className="flex items-center gap-2">
+                <div className={cn("h-2 w-2 rounded-full", habit.completed ? "bg-green-500" : "bg-neutral-300")} />
+                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{habit.name}</p>
+                <span className="text-xs text-neutral-400">{habit.completed ? "done" : "skipped"}</span>
+              </div>
+              {habit.note && <p className="mt-0.5 text-xs text-neutral-400">{habit.note}</p>}
+            </PlanItem>
+          ))}
+        </PlanSection>
+      )}
+
+      {d.projects.length > 0 && (
+        <PlanSection label="Create project">
+          {d.projects.map((proj, i) => (
+            <PlanItem key={i} included={!!inclusion.projects[i]} onToggle={() => onToggle("projects", i)}>
+              <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{proj.name}</p>
+              {proj.description && <p className="mt-0.5 text-xs text-neutral-400">{proj.description}</p>}
+            </PlanItem>
+          ))}
+        </PlanSection>
       )}
 
       {d.peopleUpdates.length > 0 && (
-        <Section icon={Users} title="People" count={d.peopleUpdates.length} note="→ Relationship memory">
+        <PlanSection label="Update people">
           {d.peopleUpdates.map((person, i) => (
-            <ItemRow key={i} included={!!inclusion.people[i]} onToggle={() => onToggle("people", i)} confidence={person.confidence} alwaysShowToggle>
-              <PersonUpdateCard
+            <PlanItem key={i} included={!!inclusion.people[i]} onToggle={() => onToggle("people", i)}>
+              <PersonPlanCard
                 person={person}
                 insightInclusion={inclusion.personInsights[i] ?? []}
                 onToggleInsight={(j) => onTogglePersonInsight(i, j)}
               />
-            </ItemRow>
+            </PlanItem>
           ))}
-        </Section>
+        </PlanSection>
+      )}
+
+      {d.memoryCandidates.length > 0 && (
+        <PlanSection label="Save memories">
+          {d.memoryCandidates.map((mem, i) => (
+            <PlanItem key={i} included={!!inclusion.memories[i]} onToggle={() => onToggle("memories", i)}>
+              <MemoryCandidateCard candidate={mem} index={i} onSaveEdit={onMemorySaveEdit} />
+            </PlanItem>
+          ))}
+        </PlanSection>
+      )}
+
+      {(d.journal.feeling || d.journal.accomplished || d.journal.improveTomorrow || d.journal.distractedBy) && (
+        <PlanSection label="Update daily log">
+          <PlanItem included={inclusion.journal} onToggle={onToggleJournal}>
+            <JournalCard journal={d.journal} />
+          </PlanItem>
+        </PlanSection>
       )}
     </div>
   );
 }
 
-// ── UPDATE preview ────────────────────────────────────────────────────────────
+function PersonPlanCard({
+  person, insightInclusion, onToggleInsight,
+}: {
+  person: PersonUpdateOutput;
+  insightInclusion: boolean[];
+  onToggleInsight: (j: number) => void;
+}) {
+  const pd = person.personData;
+  const facts = [pd.relationshipType, pd.occupation, pd.birthday && `b. ${pd.birthday}`, pd.hometown].filter(Boolean) as string[];
 
-function UpdatePreview({
+  return (
+    <div className="space-y-1.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{person.personName}</p>
+        {facts.map((f, i) => (
+          <span key={i} className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">{f}</span>
+        ))}
+      </div>
+      {person.memories.length > 0 && (
+        <div className="space-y-0.5">
+          {person.memories.map((mem, i) => (
+            <p key={i} className="text-xs text-neutral-500 dark:text-neutral-400">{mem.content}</p>
+          ))}
+        </div>
+      )}
+      {person.interaction?.summary && (
+        <p className="text-xs text-neutral-400">{person.interaction.summary}</p>
+      )}
+      {person.followUpTask && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">Follow up: {person.followUpTask.title}</p>
+      )}
+      {person.insights.length > 0 && (
+        <div className="space-y-1 border-t border-neutral-100 pt-1.5 dark:border-neutral-800">
+          {person.insights.map((ins, j) => (
+            <div key={j} className={cn("flex items-start gap-2 transition-opacity", !insightInclusion[j] && "opacity-40")}>
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleInsight(j); }}
+                className={cn(
+                  "mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors",
+                  insightInclusion[j]
+                    ? "border-neutral-900 bg-neutral-900 dark:border-neutral-50 dark:bg-neutral-50"
+                    : "border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900",
+                )}
+                aria-label={insightInclusion[j] ? "Exclude insight" : "Include insight"}
+              >
+                {insightInclusion[j] && (
+                  <svg viewBox="0 0 16 16" fill="none" className="h-full w-full p-0.5">
+                    <path d="M3 8l3.5 3.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                )}
+              </button>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs text-neutral-600 dark:text-neutral-400">{ins.title}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── UPDATE plan view ──────────────────────────────────────────────────────────
+
+function UpdatePlanView({
   actions, actionInclusion, onToggleAction,
 }: {
-  commands: import("@/lib/ai/types").CommandOutput[];
   actions: PlannedAction[];
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
 }) {
-  const visibleActions = actions
-    .map((action, index) => ({ action, index }))
-    .filter(({ action }) => isVisibleAction(action));
-  const executableCount = visibleActions.length;
-
+  const visible = actions.map((a, i) => ({ a, i })).filter(({ a }) => isVisibleAction(a));
+  if (visible.length === 0) return <p className="py-2 text-sm text-neutral-400">No changes to apply.</p>;
   return (
-    <Section icon={Zap} title="Actions to Execute" count={executableCount} note="Matches existing tasks/habits">
-      {visibleActions.map(({ action, index }) => (
-        <ItemRow key={action.id} included={!!actionInclusion[index]} onToggle={() => onToggleAction(index)} confidence="high" alwaysShowToggle>
-          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
-        </ItemRow>
-      ))}
-    </Section>
+    <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+      <PlanSection label="Applying">
+        {visible.map(({ a, i }) => (
+          <PlanItem key={a.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)}>
+            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{a.label}</p>
+          </PlanItem>
+        ))}
+      </PlanSection>
+    </div>
   );
 }
 
-// ── DECISION preview ──────────────────────────────────────────────────────────
+// ── DECISION plan view ────────────────────────────────────────────────────────
 
-function DecisionPreview({
+function DecisionPlanView({
   recommendation, actions, actionInclusion, onToggleAction,
 }: {
   recommendation: import("@/lib/intelligence/types").Recommendation;
@@ -757,40 +757,25 @@ function DecisionPreview({
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
 }) {
-  const modeColors: Record<string, string> = {
-    RECOVERY: "bg-red-50 text-red-700 dark:bg-red-950 dark:text-red-300",
-    FOCUS: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-    NORMAL: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-300",
-  };
-
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-3 flex items-center gap-2">
-          <TrendingUp className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Recommendation</span>
-          {recommendation.suggestedMode && (
-            <span className={cn("rounded-full px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider", modeColors[recommendation.suggestedMode] ?? "")}>
-              {recommendation.suggestedMode}
-            </span>
-          )}
-        </div>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{recommendation.summary}</p>
-        <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">{recommendation.reasoning}</p>
-
+        {recommendation.reasoning && (
+          <p className="mt-2 text-xs leading-relaxed text-neutral-500 dark:text-neutral-400">{recommendation.reasoning}</p>
+        )}
         {recommendation.topTask && (
           <div className="mt-3 rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-800">
-            <p className="text-xs text-neutral-500">Focus on</p>
+            <p className="text-xs text-neutral-400">Start with</p>
             <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{recommendation.topTask}</p>
           </div>
         )}
-
-        {recommendation.thingsToIgnore.length > 0 && (
+        {recommendation.thingsToIgnore?.length > 0 && (
           <div className="mt-3">
-            <p className="mb-1 text-xs text-neutral-400">Safely ignore today</p>
+            <p className="mb-1 text-xs text-neutral-400">Safely skip today</p>
             <div className="flex flex-wrap gap-1">
               {recommendation.thingsToIgnore.map((item, i) => (
-                <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 line-through dark:bg-neutral-800">
+                <span key={i} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-400 line-through dark:bg-neutral-800">
                   {item}
                 </span>
               ))}
@@ -798,26 +783,24 @@ function DecisionPreview({
           </div>
         )}
       </div>
-
-      {/* Suggested actions */}
       {actions.some(isVisibleAction) && (
-        <Section icon={Zap} title="Suggested Actions" note="Apply to your state">
-          {actions.map((action, i) => (
-            isVisibleAction(action) && (
-              <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
-                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
-              </ItemRow>
-            )
-          ))}
-        </Section>
+        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+          <PlanSection label="Actions">
+            {actions.map((a, i) => isVisibleAction(a) && (
+              <PlanItem key={a.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)}>
+                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{a.label}</p>
+              </PlanItem>
+            ))}
+          </PlanSection>
+        </div>
       )}
     </div>
   );
 }
 
-// ── REFLECTION preview ────────────────────────────────────────────────────────
+// ── REFLECTION plan view ──────────────────────────────────────────────────────
 
-function ReflectionPreview({
+function ReflectionPlanView({
   reflectionData, actions, actionInclusion, onToggleAction,
 }: {
   reflectionData: import("@/lib/intelligence/types").ReflectionData;
@@ -825,49 +808,49 @@ function ReflectionPreview({
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
 }) {
-  return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-3 flex items-center gap-2">
-          <Activity className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Reflection</span>
-        </div>
-        <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{reflectionData.reflection}</p>
-      </div>
+  const journalIdx = actions.findIndex((a) => a.type === "UPDATE_JOURNAL");
+  const otherActions = actions.filter((a) => isVisibleAction(a) && a.type !== "UPDATE_JOURNAL");
 
+  return (
+    <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+      {reflectionData.reflection && (
+        <div className="px-4 py-4">
+          <p className="text-sm leading-relaxed text-neutral-600 dark:text-neutral-400">{reflectionData.reflection}</p>
+        </div>
+      )}
       {(reflectionData.journal.feeling || reflectionData.journal.accomplished) && (
-        <Section icon={BookOpen} title="Daily Log">
-          <ItemRow included={actionInclusion[actions.findIndex((a) => a.type === "UPDATE_JOURNAL")] ?? true} onToggle={() => onToggleAction(actions.findIndex((a) => a.type === "UPDATE_JOURNAL"))} confidence="high">
+        <PlanSection label="Daily log">
+          <PlanItem included={journalIdx >= 0 ? (actionInclusion[journalIdx] ?? true) : true} onToggle={() => journalIdx >= 0 && onToggleAction(journalIdx)}>
             <JournalCard journal={{
               feeling: reflectionData.journal.feeling ?? "",
               accomplished: reflectionData.journal.accomplished ?? "",
               distractedBy: reflectionData.journal.distractedBy ?? "",
               improveTomorrow: reflectionData.journal.improveTomorrow ?? "",
             }} />
-          </ItemRow>
-        </Section>
+          </PlanItem>
+        </PlanSection>
       )}
-
-      {actions.filter((a) => isVisibleAction(a) && a.type !== "UPDATE_JOURNAL").map((action) => (
-        <div key={action.id} className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-          <ItemRow included={!!actionInclusion[actions.indexOf(action)]} onToggle={() => onToggleAction(actions.indexOf(action))} confidence="high" alwaysShowToggle>
-            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
-          </ItemRow>
-        </div>
-      ))}
+      {otherActions.length > 0 && (
+        <PlanSection label="Also saving">
+          {otherActions.map((a) => {
+            const i = actions.indexOf(a);
+            return (
+              <PlanItem key={a.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)}>
+                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{a.label}</p>
+              </PlanItem>
+            );
+          })}
+        </PlanSection>
+      )}
     </div>
   );
 }
 
-// ── QUESTION preview ──────────────────────────────────────────────────────────
+// ── QUESTION view ─────────────────────────────────────────────────────────────
 
-function QuestionPreview({ answer }: { answer: string }) {
+function QuestionView({ answer }: { answer: string }) {
   return (
-    <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="mb-3 flex items-center gap-2">
-        <HelpCircle className="h-4 w-4 text-neutral-400" />
-        <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Answer</span>
-      </div>
+    <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
       <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{answer}</p>
     </div>
   );
@@ -879,9 +862,9 @@ function isVisibleAction(action: PlannedAction): boolean {
     action.type !== "CREATE_EXPRESSION_TREND";
 }
 
-// ── PLAN preview ──────────────────────────────────────────────────────────────
+// ── PLAN view ─────────────────────────────────────────────────────────────────
 
-function PlanPreview({
+function DailyPlanView({
   plan, actions, actionInclusion, onToggleAction,
 }: {
   plan: import("@/lib/intelligence/types").PlanSummary;
@@ -890,16 +873,11 @@ function PlanPreview({
   onToggleAction: (i: number) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <div className="rounded-xl border border-neutral-200 bg-white p-5 dark:border-neutral-800 dark:bg-neutral-900">
-        <div className="mb-3 flex items-center gap-2">
-          <CalendarDays className="h-4 w-4 text-neutral-400" />
-          <span className="text-xs font-medium uppercase tracking-wider text-neutral-400">Today&apos;s Plan</span>
-        </div>
+    <div className="space-y-3">
+      <div className="rounded-xl border border-neutral-200 bg-white p-4 dark:border-neutral-800 dark:bg-neutral-900">
         <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{plan.suggestion}</p>
-
         {plan.topTasks.length > 0 && (
-          <div className="mt-3 space-y-2">
+          <div className="mt-3 space-y-1.5">
             {plan.topTasks.map((task, i) => (
               <div key={task.id} className="flex items-center gap-2">
                 <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-neutral-100 text-[10px] font-bold text-neutral-500 dark:bg-neutral-800">
@@ -910,43 +888,37 @@ function PlanPreview({
             ))}
           </div>
         )}
-
         {plan.habitsDue.length > 0 && (
-          <div className="mt-3">
-            <p className="mb-1 text-xs text-neutral-400">Habits due</p>
-            <div className="flex flex-wrap gap-1">
-              {plan.habitsDue.map((h) => (
-                <span key={h.id} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400">
-                  {h.name}
-                </span>
-              ))}
-            </div>
+          <div className="mt-3 flex flex-wrap gap-1">
+            {plan.habitsDue.map((h) => (
+              <span key={h.id} className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800 dark:text-neutral-400">
+                {h.name}
+              </span>
+            ))}
           </div>
         )}
-
         {plan.overdueCount > 0 && (
           <p className="mt-3 text-xs text-red-500">{plan.overdueCount} task{plan.overdueCount !== 1 ? "s" : ""} overdue</p>
         )}
       </div>
-
       {actions.some(isVisibleAction) && (
-        <Section icon={Zap} title="Apply to State">
-          {actions.map((action, i) => (
-            isVisibleAction(action) && (
-              <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
-                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
-              </ItemRow>
-            )
-          ))}
-        </Section>
+        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+          <PlanSection label="Apply">
+            {actions.map((a, i) => isVisibleAction(a) && (
+              <PlanItem key={a.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)}>
+                <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{a.label}</p>
+              </PlanItem>
+            ))}
+          </PlanSection>
+        </div>
       )}
     </div>
   );
 }
 
-// ── MEMORY preview ────────────────────────────────────────────────────────────
+// ── MEMORY plan view ──────────────────────────────────────────────────────────
 
-function MemoryPreview({
+function MemoryPlanView({
   candidates, actionInclusion, onToggleAction, onMemorySaveEdit,
 }: {
   candidates: MemoryCandidateOutput[];
@@ -955,13 +927,15 @@ function MemoryPreview({
   onMemorySaveEdit: (i: number, title: string, content: string) => void;
 }) {
   return (
-    <Section icon={Brain} title="Memory Candidates" count={candidates.length} note="→ Memory Vault">
-      {candidates.map((candidate, i) => (
-        <ItemRow key={i} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
-          <MemoryCandidateCard candidate={candidate} index={i} onSaveEdit={onMemorySaveEdit} />
-        </ItemRow>
-      ))}
-    </Section>
+    <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white dark:divide-neutral-800 dark:border-neutral-800 dark:bg-neutral-900">
+      <PlanSection label="Save to memory">
+        {candidates.map((mem, i) => (
+          <PlanItem key={i} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)}>
+            <MemoryCandidateCard candidate={mem} index={i} onSaveEdit={onMemorySaveEdit} />
+          </PlanItem>
+        ))}
+      </PlanSection>
+    </div>
   );
 }
 
@@ -989,12 +963,8 @@ function SavedView({
     result.ideasCreated > 0 && `${result.ideasCreated} idea${result.ideasCreated !== 1 ? "s" : ""} saved to Inbox`,
     result.remindersCreated > 0 && `${result.remindersCreated} reminder${result.remindersCreated !== 1 ? "s" : ""} added`,
     result.followUpsCreated > 0 && `${result.followUpsCreated} follow-up${result.followUpsCreated !== 1 ? "s" : ""} created`,
-    result.thoughtUnitsCreated > 0 && `${result.thoughtUnitsCreated} thought unit${result.thoughtUnitsCreated !== 1 ? "s" : ""} routed`,
     result.activityLogsCreated > 0 && `${result.activityLogsCreated} activity log${result.activityLogsCreated !== 1 ? "s" : ""} created`,
     result.thoughtsSaved > 0 && `${result.thoughtsSaved} thought${result.thoughtsSaved !== 1 ? "s" : ""} saved`,
-    result.expressionRewritesSaved > 0 && `${result.expressionRewritesSaved} expression rewrite${result.expressionRewritesSaved !== 1 ? "s" : ""} saved`,
-    result.expressionTrendsSaved > 0 && `${result.expressionTrendsSaved} expression trend${result.expressionTrendsSaved !== 1 ? "s" : ""} tracked`,
-    result.growthItemsCreated > 0 && `${result.growthItemsCreated} growth item${result.growthItemsCreated !== 1 ? "s" : ""} created`,
     result.learningItemsCreated > 0 && `${result.learningItemsCreated} learning item${result.learningItemsCreated !== 1 ? "s" : ""} created`,
     result.questionsCreated > 0 && `${result.questionsCreated} question${result.questionsCreated !== 1 ? "s" : ""} queued`,
     result.questionsAnswered > 0 && `${result.questionsAnswered} question${result.questionsAnswered !== 1 ? "s" : ""} answered`,
@@ -1005,7 +975,6 @@ function SavedView({
     result.commandsExecuted > 0 && `${result.commandsExecuted} action${result.commandsExecuted !== 1 ? "s" : ""} executed`,
     result.peopleUpdated > 0 && `${result.peopleUpdated} person record${result.peopleUpdated !== 1 ? "s" : ""} updated`,
     result.insightsSaved > 0 && `${result.insightsSaved} insight${result.insightsSaved !== 1 ? "s" : ""} saved`,
-    result.userStateUpdated && "State updated",
   ].filter(Boolean) as string[];
 
   return (
@@ -1033,135 +1002,7 @@ function SavedView({
   );
 }
 
-// ── Shared primitives ─────────────────────────────────────────────────────────
-
-function Section({
-  icon: Icon, title, count, note, children,
-}: {
-  icon: React.ElementType;
-  title: string;
-  count?: number;
-  note?: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
-      <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-3 dark:border-neutral-800">
-        <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-neutral-400" />
-          <span className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{title}</span>
-          {count !== undefined && (
-            <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-xs text-neutral-500 dark:bg-neutral-800">{count}</span>
-          )}
-        </div>
-        {note && <span className="text-xs text-neutral-400">{note}</span>}
-      </div>
-      <div className="divide-y divide-neutral-100 dark:divide-neutral-800">{children}</div>
-    </div>
-  );
-}
-
-function ItemRow({
-  included, onToggle, confidence, alwaysShowToggle = false, children,
-}: {
-  included: boolean;
-  onToggle: () => void;
-  confidence: string;
-  alwaysShowToggle?: boolean;
-  children: React.ReactNode;
-}) {
-  const isLow = confidence === "low";
-  const showCheckbox = alwaysShowToggle || isLow;
-
-  return (
-    <div className={cn("flex items-start gap-3 px-4 py-3 transition-opacity", !included && "opacity-40")}>
-      {showCheckbox ? (
-        <button
-          onClick={onToggle}
-          className={cn(
-            "mt-0.5 h-4 w-4 shrink-0 rounded border transition-colors",
-            included ? "border-neutral-900 bg-neutral-900 dark:border-neutral-50 dark:bg-neutral-50"
-                     : "border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900",
-          )}
-          aria-label={included ? "Exclude" : "Include"}
-        >
-          {included && (
-            <svg viewBox="0 0 16 16" fill="none" className="h-full w-full p-0.5">
-              <path d="M3 8l3.5 3.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          )}
-        </button>
-      ) : (
-        <button onClick={onToggle} className="mt-0.5 shrink-0 text-neutral-300 transition-colors hover:text-neutral-400" aria-label={included ? "Exclude" : "Include"}>
-          {included ? <CheckCircle2 className="h-4 w-4 text-neutral-400" /> : <div className="h-4 w-4 rounded-full border-2 border-neutral-300" />}
-        </button>
-      )}
-      <div className="min-w-0 flex-1">{children}</div>
-      {isLow && <span className="shrink-0 rounded-full bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-600 dark:bg-amber-950 dark:text-amber-400">low</span>}
-      {confidence === "medium" && <span className="shrink-0 rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] font-medium text-neutral-500 dark:bg-neutral-800">~</span>}
-    </div>
-  );
-}
-
-// ── Card components ───────────────────────────────────────────────────────────
-
-const URGENCY_COLORS: Record<string, string> = {
-  LOW: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
-  MEDIUM: "bg-blue-50 text-blue-600 dark:bg-blue-950 dark:text-blue-400",
-  HIGH: "bg-red-50 text-red-600 dark:bg-red-950 dark:text-red-400",
-};
-const IMPORTANCE_COLORS: Record<string, string> = {
-  LOW: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
-  MEDIUM: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
-  HIGH: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-400",
-};
-const ENERGY_COLORS: Record<string, string> = {
-  LOW: "bg-green-50 text-green-700 dark:bg-green-950 dark:text-green-400",
-  MEDIUM: "bg-neutral-100 text-neutral-500 dark:bg-neutral-800",
-  HIGH: "bg-purple-50 text-purple-700 dark:bg-purple-950 dark:text-purple-400",
-};
-
-function TaskCard({ task }: { task: TaskOutput }) {
-  const timeLabel = [
-    task.dueDate && formatDate(task.dueDate),
-    task.dueTime,
-    !task.dueDate && task.timeContext && task.timeContext.replace(/_/g, " "),
-  ].filter(Boolean).join(" · ");
-
-  return (
-    <div className="space-y-1.5">
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{task.title}</p>
-        {task.needsReminder && <span className="shrink-0 rounded-full bg-blue-50 px-1.5 py-0.5 text-[10px] font-medium text-blue-600 dark:bg-blue-950 dark:text-blue-400">🔔</span>}
-      </div>
-      {timeLabel && <p className="text-xs text-neutral-400">{timeLabel}</p>}
-      <div className="flex flex-wrap gap-1">
-        <MetaBadge label="U" value={task.urgency} colors={URGENCY_COLORS} title="Urgency" />
-        <MetaBadge label="I" value={task.importance} colors={IMPORTANCE_COLORS} title="Importance" />
-        <MetaBadge label="E" value={task.energyRequired} colors={ENERGY_COLORS} title="Energy" />
-        {task.projectName && <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">{task.projectName}</span>}
-      </div>
-    </div>
-  );
-}
-
-function MetaBadge({ label, value, colors, title }: { label: string; value: string; colors: Record<string, string>; title: string }) {
-  if (value === "MEDIUM") return null;
-  return (
-    <span title={`${title}: ${value}`} className={cn("rounded-full px-1.5 py-0.5 text-[10px] font-medium", colors[value] ?? "bg-neutral-100 text-neutral-500")}>
-      {label}:{value[0]}
-    </span>
-  );
-}
-
-function IdeaCard({ idea }: { idea: IdeaOutput }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{idea.title}</p>
-      <p className="mt-0.5 text-xs text-neutral-400">{idea.category}</p>
-    </div>
-  );
-}
+// ── Shared card components ────────────────────────────────────────────────────
 
 function JournalCard({ journal }: { journal: { feeling: string; accomplished: string; improveTomorrow: string; distractedBy: string } }) {
   return (
@@ -1174,37 +1015,6 @@ function JournalCard({ journal }: { journal: { feeling: string; accomplished: st
   );
 }
 
-function HabitCard({ habit }: { habit: HabitOutput }) {
-  return (
-    <div>
-      <div className="flex items-center gap-2">
-        <div className={cn("h-2 w-2 rounded-full", habit.completed ? "bg-green-500" : "bg-neutral-300")} />
-        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{habit.name}</p>
-        <span className="text-xs text-neutral-400">{habit.completed ? "completed" : "skipped"}</span>
-      </div>
-      {habit.note && <p className="ml-4 mt-0.5 text-xs text-neutral-400">{habit.note}</p>}
-    </div>
-  );
-}
-
-function ProjectCard({ project }: { project: ProjectOutput }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{project.name}</p>
-      {project.description && <p className="mt-0.5 text-xs text-neutral-400">{project.description}</p>}
-      <p className="mt-0.5 text-xs text-neutral-400">{project.priority} priority</p>
-    </div>
-  );
-}
-
-function ReminderCard({ reminder }: { reminder: ReminderOutput }) {
-  return (
-    <div>
-      <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{reminder.title}</p>
-      {reminder.when && <p className="mt-0.5 text-xs text-neutral-400">{reminder.when}</p>}
-    </div>
-  );
-}
 
 function MemoryCandidateCard({
   candidate, index, onSaveEdit,
@@ -1270,140 +1080,12 @@ function MemoryCandidateCard({
   );
 }
 
-const PERSON_MEMORY_TYPE_LABELS: Record<string, string> = {
-  BIRTHDAY: "Birthday", PREFERENCE: "Preference", STORY: "Story",
-  BOUNDARY: "Boundary", COMMUNICATION_STYLE: "Comm Style",
-  IMPORTANT_EVENT: "Event", FOLLOW_UP: "Follow Up", GENERAL: "Note",
-};
-
-const INSIGHT_TYPE_LABELS: Record<string, string> = {
-  COMMUNICATION_STYLE: "Comm Style", SOCIAL_STYLE: "Social",
-  POSSIBLE_VALUES: "Values", ENERGY_PATTERN: "Energy",
-  TRUST_PATTERN: "Trust", COMPATIBILITY_NOTE: "Compatibility",
-  HOW_TO_APPROACH: "Approach", GENERAL: "General",
-};
-
-const INSIGHT_CONFIDENCE_STYLES: Record<string, string> = {
-  HIGH: "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-  MEDIUM: "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400",
-  LOW: "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-};
-
-function PersonUpdateCard({
-  person,
-  insightInclusion,
-  onToggleInsight,
-}: {
-  person: PersonUpdateOutput;
-  insightInclusion: boolean[];
-  onToggleInsight: (insightIndex: number) => void;
-}) {
-  const pd = person.personData;
-  const facts = [
-    pd.relationshipType,
-    pd.occupation,
-    pd.birthday && `Birthday: ${pd.birthday}`,
-    pd.hometown && `From ${pd.hometown}`,
-  ].filter(Boolean) as string[];
-
-  return (
-    <div className="space-y-2">
-      <div className="flex items-center gap-2">
-        <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{person.personName}</p>
-        {facts.length > 0 && (
-          <div className="flex flex-wrap gap-1">
-            {facts.map((f, i) => (
-              <span key={i} className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[10px] text-neutral-500 dark:bg-neutral-800">{f}</span>
-            ))}
-          </div>
-        )}
-      </div>
-      {person.memories.length > 0 && (
-        <div className="space-y-1">
-          {person.memories.map((mem, i) => (
-            <div key={i} className="flex items-start gap-1.5">
-              <span className="mt-0.5 rounded bg-purple-50 px-1 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-purple-600 dark:bg-purple-950 dark:text-purple-400">
-                {PERSON_MEMORY_TYPE_LABELS[mem.type] ?? mem.type}
-              </span>
-              <p className="text-xs text-neutral-600 dark:text-neutral-400">{mem.content}</p>
-            </div>
-          ))}
-        </div>
-      )}
-      {person.interaction && (
-        <p className="text-xs text-neutral-400">{person.interaction.summary}</p>
-      )}
-      {person.followUpTask && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">Follow-up: {person.followUpTask.title}</p>
-      )}
-      {person.insights.length > 0 && (
-        <div className="mt-2 space-y-1.5 border-t border-neutral-100 pt-2 dark:border-neutral-800">
-          <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">AI Insights</p>
-          {person.insights.map((ins, j) => (
-            <div
-              key={j}
-              className={cn("flex items-start gap-2 rounded-lg p-2 transition-opacity",
-                insightInclusion[j] ? "bg-neutral-50 dark:bg-neutral-800/50" : "opacity-40",
-              )}
-            >
-              <button
-                onClick={() => onToggleInsight(j)}
-                className={cn(
-                  "mt-0.5 h-3.5 w-3.5 shrink-0 rounded border transition-colors",
-                  insightInclusion[j]
-                    ? "border-neutral-900 bg-neutral-900 dark:border-neutral-50 dark:bg-neutral-50"
-                    : "border-neutral-300 bg-white dark:border-neutral-600 dark:bg-neutral-900",
-                )}
-                aria-label={insightInclusion[j] ? "Exclude insight" : "Include insight"}
-              >
-                {insightInclusion[j] && (
-                  <svg viewBox="0 0 16 16" fill="none" className="h-full w-full p-0.5">
-                    <path d="M3 8l3.5 3.5L13 4.5" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                )}
-              </button>
-              <div className="min-w-0 flex-1 space-y-0.5">
-                <div className="flex flex-wrap items-center gap-1">
-                  <span className={cn("rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider", INSIGHT_CONFIDENCE_STYLES[ins.confidence] ?? "")}>
-                    {ins.confidence}
-                  </span>
-                  <span className="rounded-full bg-neutral-100 px-1.5 py-0.5 text-[9px] text-neutral-500 dark:bg-neutral-800">
-                    {INSIGHT_TYPE_LABELS[ins.type] ?? ins.type}
-                  </span>
-                </div>
-                <p className="text-xs font-medium text-neutral-900 dark:text-neutral-50">{ins.title}</p>
-                <p className="text-[11px] leading-relaxed text-neutral-500 dark:text-neutral-400">{ins.content}</p>
-                {ins.evidence.length > 0 && (
-                  <p className="text-[10px] italic text-neutral-400">
-                    Evidence: {ins.evidence.map((e) => `"${e}"`).join(", ")}
-                  </p>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
-
 function JournalRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex gap-2">
       <dt className="w-20 shrink-0 text-neutral-400">{label}</dt>
       <dd className="text-neutral-700 dark:text-neutral-300">{value}</dd>
     </div>
-  );
-}
-
-function Chip({ color, children }: { color: "blue" | "amber"; children: React.ReactNode }) {
-  return (
-    <span className={cn("rounded-full px-2.5 py-0.5 text-xs font-medium",
-      color === "blue" && "bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-300",
-      color === "amber" && "bg-amber-50 text-amber-700 dark:bg-amber-950 dark:text-amber-300",
-    )}>
-      {children}
-    </span>
   );
 }
 

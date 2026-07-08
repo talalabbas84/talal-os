@@ -1,7 +1,7 @@
 import { ArticulationPrompt } from "./articulation";
 import { CoachPrompt } from "./coach";
 import { DecisionPrompt } from "./decision";
-import { ExpressionPrompt } from "./expression";
+import { UnderstandingPrompt } from "./understanding";
 import { FinancePrompt } from "./finance";
 import { GeneralPrompt } from "./general";
 import { HealthPrompt } from "./health";
@@ -13,7 +13,7 @@ import type { BrainName, BrainPrompt } from "../builders/types";
 
 export const brainPrompts = {
   articulation: ArticulationPrompt,
-  expression: ExpressionPrompt,
+  understanding: UnderstandingPrompt,
   decision: DecisionPrompt,
   planning: PlanningPrompt,
   reflection: ReflectionPrompt,
@@ -35,7 +35,7 @@ export {
   ArticulationPrompt,
   CoachPrompt,
   DecisionPrompt,
-  ExpressionPrompt,
+  UnderstandingPrompt,
   FinancePrompt,
   GeneralPrompt,
   HealthPrompt,

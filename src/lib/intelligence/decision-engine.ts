@@ -20,7 +20,7 @@ import {
   planFromMemoryCandidates,
   planFromDailyPlan,
   planFromSmartCaptureShortcut,
-  planFromExpressionCoach,
+  planFromUnderstanding,
 } from "./action-planner";
 import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-learning-engine";
@@ -37,16 +37,16 @@ export async function processCapture(
   const provider = getAIProvider();
   const thoughtUnits = splitThoughts(text);
   const thoughtUnitActions = planFromThoughtUnits(thoughtUnits);
-  const articulation = await articulateCapture(text, userId);
+  const articulation = await articulateCapture(text);
   const articulatedText = articulation.articulated;
-  const expressionActions = planFromExpressionCoach(articulation);
+  const understandingActions = planFromUnderstanding(articulation);
 
   const shortcutActions = isStandaloneSmartShortcut(articulatedText)
     ? planFromSmartCaptureShortcut(articulatedText)
     : [];
   if (shortcutActions.length > 0) {
     const growthActions = await planGrowthFromText(userId, articulatedText);
-    const baseActions = [...expressionActions, ...thoughtUnitActions, ...shortcutActions, ...growthActions];
+    const baseActions = [...understandingActions, ...thoughtUnitActions, ...shortcutActions, ...growthActions];
     const personalIntelligenceActions = await planPersonalIntelligenceActions({
       userId,
       rawText: articulation.original,
@@ -81,7 +81,7 @@ export async function processCapture(
         capture,
         skipThought: isDirectCommand(articulatedText, capture),
       });
-      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromCommands(commands), ...thoughtLearningActions, ...growthActions];
+      const baseActions = [...understandingActions, ...thoughtUnitActions, ...planFromCommands(commands), ...thoughtLearningActions, ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -101,7 +101,7 @@ export async function processCapture(
     case "DECISION": {
       const recommendation = await generateRecommendation(articulatedText, contextPrompt);
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromRecommendation(recommendation), ...growthActions];
+      const baseActions = [...understandingActions, ...thoughtUnitActions, ...planFromRecommendation(recommendation), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -131,7 +131,7 @@ export async function processCapture(
         memoryCandidates: reflectionData.memoryCandidates,
       };
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromReflection(data), ...growthActions];
+      const baseActions = [...understandingActions, ...thoughtUnitActions, ...planFromReflection(data), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -151,11 +151,11 @@ export async function processCapture(
       const answer = await provider.answerQuestion(articulatedText, contextPrompt);
       const growthActions = await planGrowthFromText(userId, articulatedText);
       const baseActions = growthActions.length > 0
-        ? [...expressionActions, ...thoughtUnitActions, ...growthActions]
+        ? [...understandingActions, ...thoughtUnitActions, ...growthActions]
         : thoughtUnitActions.length > 0
-          ? [...expressionActions, ...thoughtUnitActions]
-          : expressionActions.length > 0
-            ? expressionActions
+          ? [...understandingActions, ...thoughtUnitActions]
+          : understandingActions.length > 0
+            ? understandingActions
           : [];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
@@ -178,7 +178,7 @@ export async function processCapture(
     case "PLAN": {
       const plan = await runPlanningEngine(userId);
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromDailyPlan(plan), ...growthActions];
+      const baseActions = [...understandingActions, ...thoughtUnitActions, ...planFromDailyPlan(plan), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -204,7 +204,7 @@ export async function processCapture(
         cleanedText: articulatedText,
         capture,
       });
-      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions];
+      const baseActions = [...understandingActions, ...thoughtUnitActions, ...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -250,7 +250,7 @@ export async function processCapture(
         skipThought: isDirectCommand(articulatedText, capture),
       });
       const baseActions = [
-        ...expressionActions,
+        ...understandingActions,
         ...thoughtUnitActions,
         ...planFromCapture(capture, defaultInclusion, {}),
         ...thoughtLearningActions,
