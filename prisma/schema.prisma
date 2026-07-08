@@ -49,6 +49,8 @@ model User {
   personalGrowthAreas PersonalGrowthArea[]
   timelineEvents    TimelineEvent[]
   dailyReflections  DailyReflection[]
+  captureRecords    CaptureRecord[]
+  knowledgeGraphEdges KnowledgeGraphEdge[]
   captureDrafts     CaptureDraft[]
   pushSubscriptions PushSubscription[]
 }
@@ -805,6 +807,50 @@ model CaptureDraft {
   @@index([createdAt])
 }
 
+model CaptureRecord {
+  id          String   @id @default(cuid())
+  rawText     String
+  cleanedText String
+  summary     String?
+  intent      String?
+  source      String   @default("CAPTURE")
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([intent])
+  @@index([createdAt])
+}
+
+model KnowledgeGraphEdge {
+  id         String                 @id @default(cuid())
+  sourceType String
+  sourceId   String
+  relation   KnowledgeGraphRelation
+  targetType String
+  targetId   String
+  confidence Level                  @default(MEDIUM)
+  evidence   String?
+  metadata   Json?
+  createdBy  String                 @default("SYSTEM")
+  createdAt  DateTime               @default(now())
+  updatedAt  DateTime               @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, sourceType, sourceId, relation, targetType, targetId])
+  @@index([userId])
+  @@index([sourceType, sourceId])
+  @@index([targetType, targetId])
+  @@index([relation])
+  @@index([createdAt])
+}
+
 model PushSubscription {
   id        String   @id @default(cuid())
   endpoint  String   @unique
@@ -833,6 +879,23 @@ enum PersonMemorySource {
   CAPTURE
   MANUAL
   INTERACTION
+}
+
+enum KnowledgeGraphRelation {
+  CREATED_FROM
+  RELATED_TO
+  MENTIONS
+  REFERENCES_PERSON
+  BELONGS_TO_PROJECT
+  INSPIRED_BY
+  GENERATED
+  SCHEDULED_WITH
+  FOLLOW_UP_FOR
+  LEARNED_FOR
+  REINFORCES
+  CONTRADICTS
+  EVOLVES_FROM
+  DUPLICATE_OF
 }
 
 enum InsightType {

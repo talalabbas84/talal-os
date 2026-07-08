@@ -4,6 +4,13 @@
 
 import { prisma } from "@/lib/prisma";
 import { computePriorityScore } from "@/utils/priority";
+import {
+  createCaptureRecordFromActions,
+  createKnowledgeContext,
+  entityRef,
+  persistKnowledgeGraphLinks,
+  rememberEntity,
+} from "@/lib/knowledge-graph";
 import type { PlannedAction, ExecutionResult } from "./types";
 import type { Task, Habit, Prisma } from "@prisma/client";
 
@@ -45,6 +52,9 @@ export async function executeActions(
     personalProfileUpdated: false,
     dailyReflectionsSaved: 0,
   };
+  const knowledgeContext = createKnowledgeContext(
+    await createCaptureRecordFromActions(userId, actions),
+  );
 
   // Prefetch for fuzzy matching (only if needed)
   const needsMatch = actions.some(
@@ -94,7 +104,7 @@ export async function executeActions(
         }
 
         const score = computePriorityScore(payload.urgency, payload.importance, payload.energyRequired);
-        await prisma.task.create({
+        const created = await prisma.task.create({
           data: {
             title: payload.title,
             description: payload.description || null,
@@ -111,22 +121,24 @@ export async function executeActions(
             projectId,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("TASK", created.id, created.title, { projectId }));
         result.tasksCreated++;
         break;
       }
 
       case "CREATE_IDEA": {
         const { payload } = action;
-        await prisma.inboxEntry.create({
+        const created = await prisma.inboxEntry.create({
           data: { title: payload.title, description: payload.description || null, category: "IDEA", userId },
         });
+        rememberEntity(knowledgeContext, entityRef("INBOX_ENTRY", created.id, created.title));
         result.ideasCreated++;
         break;
       }
 
       case "CREATE_REMINDER": {
         const { payload } = action;
-        await prisma.inboxEntry.create({
+        const created = await prisma.inboxEntry.create({
           data: {
             title: payload.title,
             description: payload.when ? `When: ${payload.when}` : null,
@@ -134,6 +146,7 @@ export async function executeActions(
             userId,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("REMINDER", created.id, created.title));
         result.remindersCreated++;
         break;
       }
@@ -154,9 +167,10 @@ export async function executeActions(
             },
           });
           relatedPersonId = person.id;
+          rememberEntity(knowledgeContext, entityRef("PERSON", person.id, person.name));
         }
 
-        await prisma.eventPlaceholder.create({
+        const created = await prisma.eventPlaceholder.create({
           data: {
             userId,
             title: payload.title,
@@ -170,13 +184,14 @@ export async function executeActions(
             needsReminder: payload.needsReminder,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("EVENT", created.id, created.title, { relatedPersonId }));
         result.eventPlaceholdersCreated++;
         break;
       }
 
       case "CREATE_FOLLOW_UP": {
         const { payload } = action;
-        await prisma.followUp.create({
+        const created = await prisma.followUp.create({
           data: {
             userId,
             title: payload.title,
@@ -186,13 +201,14 @@ export async function executeActions(
             createdFrom: payload.createdFrom ?? null,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("FOLLOW_UP", created.id, created.title));
         result.followUpsCreated++;
         break;
       }
 
       case "CREATE_THOUGHT_UNIT": {
         const { payload } = action;
-        await prisma.thoughtUnit.create({
+        const created = await prisma.thoughtUnit.create({
           data: {
             userId,
             rawText: payload.rawText,
@@ -203,13 +219,14 @@ export async function executeActions(
             routedTo: payload.routedTo ?? null,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("THOUGHT_UNIT", created.id, created.cleanedText));
         result.thoughtUnitsCreated++;
         break;
       }
 
       case "CREATE_ACTIVITY_LOG": {
         const { payload } = action;
-        await prisma.activityLog.create({
+        const created = await prisma.activityLog.create({
           data: {
             userId,
             activity: payload.activity,
@@ -222,13 +239,14 @@ export async function executeActions(
             sourceCaptureId: payload.sourceCaptureId ?? null,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("ACTIVITY", created.id, created.activity));
         result.activityLogsCreated++;
         break;
       }
 
       case "CREATE_THOUGHT": {
         const { payload } = action;
-        await prisma.thought.create({
+        const created = await prisma.thought.create({
           data: {
             userId,
             rawText: payload.rawText,
@@ -242,6 +260,7 @@ export async function executeActions(
             source: payload.source,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("THOUGHT", created.id, created.summary));
         result.thoughtsSaved++;
         break;
       }
@@ -312,7 +331,7 @@ export async function executeActions(
             },
           });
         } else {
-          await prisma.growthItem.create({
+          const created = await prisma.growthItem.create({
             data: {
               userId,
               category: payload.category,
@@ -325,6 +344,7 @@ export async function executeActions(
               sourceCaptureId: payload.sourceCaptureId ?? null,
             },
           });
+          rememberEntity(knowledgeContext, entityRef("GROWTH_ITEM", created.id, created.title));
           result.growthItemsCreated++;
         }
         break;
@@ -351,7 +371,7 @@ export async function executeActions(
             },
           });
         } else {
-          await prisma.learningItem.create({
+          const created = await prisma.learningItem.create({
             data: {
               userId,
               title: payload.title,
@@ -363,6 +383,7 @@ export async function executeActions(
               nextReviewAt: parseDate(payload.nextReviewAt),
             },
           });
+          rememberEntity(knowledgeContext, entityRef("LEARNING_ITEM", created.id, created.title));
           result.learningItemsCreated++;
         }
         break;
@@ -379,7 +400,7 @@ export async function executeActions(
         });
 
         if (!existing) {
-          await prisma.followUpQuestion.create({
+          const created = await prisma.followUpQuestion.create({
             data: {
               userId,
               category: payload.category,
@@ -390,6 +411,7 @@ export async function executeActions(
               relatedEntityId: payload.relatedEntityId ?? null,
             },
           });
+          rememberEntity(knowledgeContext, entityRef("QUESTION", created.id, created.question));
           result.questionsCreated++;
         }
         break;
@@ -411,7 +433,7 @@ export async function executeActions(
             where: { id: question.id },
             data: { status: "ANSWERED", answeredAt: now },
           });
-          await prisma.memoryEntry.create({
+          const createdMemory = await prisma.memoryEntry.create({
             data: {
               userId,
               title: `Answer: ${question.question}`,
@@ -421,6 +443,8 @@ export async function executeActions(
               source: "CAPTURE",
             },
           });
+          rememberEntity(knowledgeContext, entityRef("QUESTION", question.id, question.question));
+          rememberEntity(knowledgeContext, entityRef("MEMORY", createdMemory.id, createdMemory.title));
           result.questionsAnswered++;
           result.memoriesSaved++;
         }
@@ -630,16 +654,18 @@ export async function executeActions(
             data: { name: payload.name, description: payload.description || null, priority: payload.priority, userId },
           });
           projectCache[key] = created.id;
+          rememberEntity(knowledgeContext, entityRef("PROJECT", created.id, created.name));
           result.projectsCreated++;
         } else {
           projectCache[key] = existing.id;
+          rememberEntity(knowledgeContext, entityRef("PROJECT", existing.id, existing.name));
         }
         break;
       }
 
       case "CREATE_MEMORY": {
         const { payload } = action;
-        await prisma.memoryEntry.create({
+        const created = await prisma.memoryEntry.create({
           data: {
             title: payload.title,
             content: payload.content,
@@ -649,6 +675,7 @@ export async function executeActions(
             userId,
           },
         });
+        rememberEntity(knowledgeContext, entityRef("MEMORY", created.id, created.title));
         result.memoriesSaved++;
         break;
       }
@@ -657,7 +684,7 @@ export async function executeActions(
         const { payload } = action;
         const hasContent = payload.feeling || payload.accomplished || payload.distractedBy || payload.improveTomorrow;
         if (hasContent) {
-          await prisma.dailyLog.upsert({
+          const dailyLog = await prisma.dailyLog.upsert({
             where: { userId_date: { userId, date: today } },
             create: {
               userId, date: today,
@@ -673,6 +700,7 @@ export async function executeActions(
               ...(payload.improveTomorrow && { improve: payload.improveTomorrow }),
             },
           });
+          rememberEntity(knowledgeContext, entityRef("DAILY_LOG", dailyLog.id, dailyLog.feeling ?? dailyLog.accomplished ?? "Daily log"));
           result.journalSaved = true;
         }
         break;
@@ -813,10 +841,11 @@ export async function executeActions(
             },
           });
         }
+        rememberEntity(knowledgeContext, entityRef("PERSON", person.id, person.name));
 
         // Create PersonMemory entries
         for (const mem of payload.memories) {
-          await prisma.personMemory.create({
+          const createdMemory = await prisma.personMemory.create({
             data: {
               userId,
               personId: person.id,
@@ -827,12 +856,13 @@ export async function executeActions(
               source: "CAPTURE",
             },
           });
+          rememberEntity(knowledgeContext, entityRef("PERSON_MEMORY", createdMemory.id, createdMemory.title, { relatedPersonId: person.id }));
         }
 
         // Create PersonInteraction if present
         if (payload.interaction) {
           const ia = payload.interaction;
-          await prisma.personInteraction.create({
+          const createdInteraction = await prisma.personInteraction.create({
             data: {
               userId,
               personId: person.id,
@@ -847,12 +877,13 @@ export async function executeActions(
               followUpDate: ia.followUpDate ?? null,
             },
           });
+          rememberEntity(knowledgeContext, entityRef("PERSON_INTERACTION", createdInteraction.id, createdInteraction.summary, { relatedPersonId: person.id }));
         }
 
         // Create follow-up Task if present
         if (payload.followUpTask) {
           const ft = payload.followUpTask;
-          await prisma.task.create({
+          const createdTask = await prisma.task.create({
             data: {
               userId,
               title: ft.title,
@@ -863,7 +894,8 @@ export async function executeActions(
               energyRequired: "LOW",
             },
           });
-          await prisma.followUp.create({
+          rememberEntity(knowledgeContext, entityRef("TASK", createdTask.id, createdTask.title, { relatedPersonId: person.id }));
+          const createdFollowUp = await prisma.followUp.create({
             data: {
               userId,
               title: ft.title,
@@ -873,12 +905,13 @@ export async function executeActions(
               createdFrom: "PERSON_CAPTURE",
             },
           });
+          rememberEntity(knowledgeContext, entityRef("FOLLOW_UP", createdFollowUp.id, createdFollowUp.title, { relatedPersonId: person.id }));
           result.followUpsCreated++;
         }
 
         // Create PersonInsight entries
         for (const ins of payload.insights) {
-          await prisma.personInsight.create({
+          const createdInsight = await prisma.personInsight.create({
             data: {
               userId,
               personId: person.id,
@@ -889,6 +922,7 @@ export async function executeActions(
               evidence: ins.evidence,
             },
           });
+          rememberEntity(knowledgeContext, entityRef("PERSON_INSIGHT", createdInsight.id, createdInsight.title, { relatedPersonId: person.id }));
           result.insightsSaved++;
         }
 
@@ -898,6 +932,7 @@ export async function executeActions(
     }
   }
 
+  await persistKnowledgeGraphLinks(userId, knowledgeContext);
   return result;
 }
 
