@@ -11,6 +11,8 @@ import {
   persistKnowledgeGraphLinks,
   rememberEntity,
 } from "@/lib/knowledge-graph";
+import { batchRecordLifeEvents } from "./timeline-engine";
+import type { LifeEventInput } from "./timeline-engine";
 import type { PlannedAction, ExecutionResult } from "./types";
 import type { Task, Habit, Prisma } from "@prisma/client";
 
@@ -51,7 +53,10 @@ export async function executeActions(
     timelineEventsCreated: 0,
     personalProfileUpdated: false,
     dailyReflectionsSaved: 0,
+    lifeTimelineEntriesCreated: 0,
   };
+  const lifeEntries: LifeEventInput[] = [];
+  const now = new Date();
   const knowledgeContext = createKnowledgeContext(
     await createCaptureRecordFromActions(userId, actions),
   );
@@ -122,6 +127,14 @@ export async function executeActions(
           },
         });
         rememberEntity(knowledgeContext, entityRef("TASK", created.id, created.title, { projectId }));
+        lifeEntries.push({
+          title: `Started: ${created.title}`,
+          occurredAt: now,
+          entityType: "TASK",
+          entityId: created.id,
+          category: projectId ? "WORK" : "PERSONAL",
+          importance: payload.importance ?? "MEDIUM",
+        });
         result.tasksCreated++;
         break;
       }
@@ -261,6 +274,14 @@ export async function executeActions(
           },
         });
         rememberEntity(knowledgeContext, entityRef("THOUGHT", created.id, created.summary));
+        lifeEntries.push({
+          title: created.summary,
+          occurredAt: now,
+          entityType: "THOUGHT",
+          entityId: created.id,
+          category: mapThoughtCategory(created.category),
+          importance: (payload.importance as LifeEventInput["importance"]) ?? "MEDIUM",
+        });
         result.thoughtsSaved++;
         break;
       }
@@ -384,6 +405,14 @@ export async function executeActions(
             },
           });
           rememberEntity(knowledgeContext, entityRef("LEARNING_ITEM", created.id, created.title));
+          lifeEntries.push({
+            title: `Learned: ${created.title}`,
+            occurredAt: now,
+            entityType: "LEARNING",
+            entityId: created.id,
+            category: "GROWTH",
+            importance: "MEDIUM",
+          });
           result.learningItemsCreated++;
         }
         break;
@@ -655,6 +684,14 @@ export async function executeActions(
           });
           projectCache[key] = created.id;
           rememberEntity(knowledgeContext, entityRef("PROJECT", created.id, created.name));
+          lifeEntries.push({
+            title: `Started project: ${created.name}`,
+            occurredAt: now,
+            entityType: "PROJECT",
+            entityId: created.id,
+            category: "WORK",
+            importance: "HIGH",
+          });
           result.projectsCreated++;
         } else {
           projectCache[key] = existing.id;
@@ -676,6 +713,14 @@ export async function executeActions(
           },
         });
         rememberEntity(knowledgeContext, entityRef("MEMORY", created.id, created.title));
+        lifeEntries.push({
+          title: `Remembered: ${created.title}`,
+          occurredAt: now,
+          entityType: "MEMORY",
+          entityId: created.id,
+          category: "PERSONAL",
+          importance: (payload.importance as LifeEventInput["importance"]) ?? "MEDIUM",
+        });
         result.memoriesSaved++;
         break;
       }
@@ -701,6 +746,15 @@ export async function executeActions(
             },
           });
           rememberEntity(knowledgeContext, entityRef("DAILY_LOG", dailyLog.id, dailyLog.feeling ?? dailyLog.accomplished ?? "Daily log"));
+          lifeEntries.push({
+            title: "Journaled",
+            summary: [payload.feeling, payload.accomplished].filter(Boolean).join(" — ") || undefined,
+            occurredAt: now,
+            entityType: "JOURNAL",
+            entityId: dailyLog.id,
+            category: "PERSONAL",
+            importance: "MEDIUM",
+          });
           result.journalSaved = true;
         }
         break;
@@ -751,6 +805,14 @@ export async function executeActions(
         const match = findTaskFuzzy(openTasks, action.payload.taskTitle);
         if (match) {
           await prisma.task.update({ where: { id: match.id }, data: { status: "DONE" } });
+          lifeEntries.push({
+            title: `Completed: ${match.title}`,
+            occurredAt: now,
+            entityType: "TASK",
+            entityId: match.id,
+            category: match.projectId ? "WORK" : "PERSONAL",
+            importance: "MEDIUM",
+          });
           result.commandsExecuted++;
         }
         break;
@@ -760,6 +822,14 @@ export async function executeActions(
         const match = openTasks[0];
         if (match) {
           await prisma.task.update({ where: { id: match.id }, data: { status: "DONE" } });
+          lifeEntries.push({
+            title: `Completed: ${match.title}`,
+            occurredAt: now,
+            entityType: "TASK",
+            entityId: match.id,
+            category: match.projectId ? "WORK" : "PERSONAL",
+            importance: "MEDIUM",
+          });
           result.commandsExecuted++;
         }
         break;
@@ -773,6 +843,14 @@ export async function executeActions(
           });
           if (!existing) {
             await prisma.habitCompletion.create({ data: { habitId: match.id, date: today } });
+            lifeEntries.push({
+              title: match.name,
+              occurredAt: now,
+              entityType: "HABIT",
+              entityId: match.id,
+              category: "HEALTH",
+              importance: "MEDIUM",
+            });
             result.habitsUpdated++;
           }
         }
@@ -926,6 +1004,17 @@ export async function executeActions(
           result.insightsSaved++;
         }
 
+        lifeEntries.push({
+          title: payload.interaction
+            ? `Interaction with ${payload.personName}`
+            : `Updated: ${payload.personName}`,
+          summary: payload.interaction?.summary,
+          occurredAt: now,
+          entityType: "PERSON",
+          entityId: person.id,
+          category: "RELATIONSHIP",
+          importance: "MEDIUM",
+        });
         result.peopleUpdated++;
         break;
       }
@@ -933,6 +1022,12 @@ export async function executeActions(
   }
 
   await persistKnowledgeGraphLinks(userId, knowledgeContext);
+
+  if (lifeEntries.length > 0) {
+    await batchRecordLifeEvents(userId, lifeEntries);
+    result.lifeTimelineEntriesCreated = lifeEntries.length;
+  }
+
   return result;
 }
 
@@ -994,4 +1089,19 @@ function nullableJson(value: unknown): Prisma.InputJsonValue | undefined {
 
 function toJson(value: unknown): Prisma.InputJsonValue {
   return JSON.parse(JSON.stringify(value ?? {})) as Prisma.InputJsonValue;
+}
+
+function mapThoughtCategory(category: string): LifeEventInput["category"] {
+  const map: Record<string, LifeEventInput["category"]> = {
+    WORK: "WORK",
+    PROJECT: "WORK",
+    CAREER: "WORK",
+    RELATIONSHIP: "RELATIONSHIP",
+    HEALTH: "HEALTH",
+    LEARNING: "GROWTH",
+    GROWTH: "GROWTH",
+    CREATIVE: "CREATIVE",
+    DANCE: "HEALTH",
+  };
+  return map[category?.toUpperCase()] ?? "PERSONAL";
 }

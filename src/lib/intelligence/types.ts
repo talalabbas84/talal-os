@@ -615,4 +615,5 @@ export interface ExecutionResult {
   timelineEventsCreated: number;
   personalProfileUpdated: boolean;
   dailyReflectionsSaved: number;
+  lifeTimelineEntriesCreated: number;
 }

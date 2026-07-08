@@ -53,6 +53,7 @@ model User {
   knowledgeGraphEdges KnowledgeGraphEdge[]
   captureDrafts     CaptureDraft[]
   pushSubscriptions PushSubscription[]
+  lifeTimeline      LifeTimelineEntry[]
 }
 
 model UserState {
@@ -862,6 +863,50 @@ model PushSubscription {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+}
+
+model LifeTimelineEntry {
+  id         String         @id @default(cuid())
+  title      String         // human-readable event label
+  summary    String?        // optional richer context for AI queries
+  occurredAt DateTime       // when this happened (time of capture)
+  createdAt  DateTime       @default(now())
+
+  entityType LifeEntityType
+  entityId   String?        // ID of the linked entity (nullable for composite events)
+  category   LifeCategory   @default(PERSONAL)
+  importance MemoryImportance @default(MEDIUM)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, occurredAt])
+  @@index([userId, entityType])
+  @@index([entityType, entityId])
+  @@index([userId, category])
+}
+
+enum LifeEntityType {
+  TASK
+  PROJECT
+  PERSON
+  THOUGHT
+  MEMORY
+  LEARNING
+  HABIT
+  JOURNAL
+  EVENT
+  CAPTURE
+}
+
+enum LifeCategory {
+  WORK
+  PERSONAL
+  RELATIONSHIP
+  HEALTH
+  GROWTH
+  CREATIVE
+  OTHER
 }
 
 enum PersonMemoryType {
