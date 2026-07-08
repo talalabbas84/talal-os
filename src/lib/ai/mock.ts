@@ -396,6 +396,7 @@ function extractHabits(text: string, healthStatus?: string): HabitOutput[] {
     const lower = sentence.toLowerCase();
     for (const habitName of HABIT_NAMES) {
       if (!lower.includes(habitName) || seen.has(habitName)) continue;
+      if (!isExplicitHabitUpdate(lower, habitName)) continue;
       const skipped = SKIP_WORDS.some((w) => lower.includes(w));
       const note = skipped
         ? healthStatus ? `Skipped because: ${healthStatus.toLowerCase()}` : "Skipped today"
@@ -406,6 +407,15 @@ function extractHabits(text: string, healthStatus?: string): HabitOutput[] {
   }
 
   return habits;
+}
+
+function isExplicitHabitUpdate(sentence: string, habitName: string): boolean {
+  const escapedHabit = habitName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const completedBefore = new RegExp(`\\b(?:finished|completed|did|done with|went to|attended)\\s+(?:my\\s+|the\\s+)?${escapedHabit}\\b`, "i");
+  const completedAfter = new RegExp(`\\b${escapedHabit}\\s+(?:done|completed|finished)\\b`, "i");
+  const skipped = new RegExp(`\\b(?:skip|skipped|not today|missed|couldn'?t go to|didn'?t go to)\\b.*\\b${escapedHabit}\\b|\\b${escapedHabit}\\b.*\\b(?:skip|skipped|not today|missed)\\b`, "i");
+
+  return completedBefore.test(sentence) || completedAfter.test(sentence) || skipped.test(sentence);
 }
 
 function buildReflection(

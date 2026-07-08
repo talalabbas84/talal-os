@@ -23,6 +23,8 @@ export async function executeActions(
     thoughtUnitsCreated: 0,
     activityLogsCreated: 0,
     thoughtsSaved: 0,
+    expressionRewritesSaved: 0,
+    expressionTrendsSaved: 0,
     growthItemsCreated: 0,
     learningItemsCreated: 0,
     questionsCreated: 0,
@@ -204,6 +206,50 @@ export async function executeActions(
           },
         });
         result.thoughtsSaved++;
+        break;
+      }
+
+      case "CREATE_EXPRESSION_REWRITE": {
+        const { payload } = action;
+        const existing = await prisma.expressionRewrite.findFirst({
+          where: {
+            userId,
+            rawText: payload.rawText,
+            improvedText: payload.improvedText,
+          },
+        });
+
+        if (!existing) {
+          await prisma.expressionRewrite.create({
+            data: {
+              userId,
+              rawText: payload.rawText,
+              articulatedText: payload.articulatedText,
+              improvedText: payload.improvedText,
+              explanation: payload.explanation ?? null,
+              vocabularySuggestions: nullableJson(payload.vocabularySuggestions),
+              ambiguityNotes: nullableJson(payload.ambiguityNotes),
+              clarificationQuestion: payload.clarificationQuestion ?? null,
+            },
+          });
+          result.expressionRewritesSaved++;
+        }
+        break;
+      }
+
+      case "CREATE_EXPRESSION_TREND": {
+        const { payload } = action;
+        await prisma.expressionTrend.create({
+          data: {
+            userId,
+            clarity: payload.clarity,
+            specificity: payload.specificity,
+            vocabularyVariety: payload.vocabularyVariety,
+            structure: payload.structure,
+            notes: payload.notes ?? null,
+          },
+        });
+        result.expressionTrendsSaved++;
         break;
       }
 

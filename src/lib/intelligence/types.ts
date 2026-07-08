@@ -31,9 +31,28 @@ export interface IntentResult {
 export interface ArticulationResult {
   original: string;
   articulated: string;
+  improvedArticulation: string;
+  vocabularySuggestions: VocabularySuggestion[];
+  ambiguityNotes: string[];
+  clarificationQuestion: string | null;
+  explanation: string;
+  expressionScore: ExpressionScoreTrend;
   confidence: "high" | "medium" | "low";
   changed: boolean;
   notes: string;
+}
+
+export interface VocabularySuggestion {
+  original: string;
+  suggestions: string[];
+  reason: string;
+}
+
+export interface ExpressionScoreTrend {
+  clarity: string;
+  specificity: string;
+  vocabularyVariety: string;
+  structure: string;
 }
 
 // ── Action types ──────────────────────────────────────────────────────────────
@@ -47,6 +66,8 @@ export const ACTION_TYPES = [
   "CREATE_THOUGHT_UNIT",
   "CREATE_ACTIVITY_LOG",
   "CREATE_THOUGHT",
+  "CREATE_EXPRESSION_REWRITE",
+  "CREATE_EXPRESSION_TREND",
   "CREATE_GROWTH_ITEM",
   "CREATE_LEARNING_ITEM",
   "CREATE_FOLLOW_UP_QUESTION",
@@ -83,6 +104,8 @@ export type PlannedAction =
   | { id: string; type: "CREATE_THOUGHT_UNIT"; label: string; payload: ThoughtUnitPayload }
   | { id: string; type: "CREATE_ACTIVITY_LOG"; label: string; payload: ActivityLogPayload }
   | { id: string; type: "CREATE_THOUGHT"; label: string; payload: ThoughtPayload }
+  | { id: string; type: "CREATE_EXPRESSION_REWRITE"; label: string; payload: ExpressionRewritePayload }
+  | { id: string; type: "CREATE_EXPRESSION_TREND"; label: string; payload: ExpressionTrendPayload }
   | { id: string; type: "CREATE_GROWTH_ITEM"; label: string; payload: GrowthItemPayload }
   | { id: string; type: "CREATE_LEARNING_ITEM"; label: string; payload: LearningItemPayload }
   | { id: string; type: "CREATE_FOLLOW_UP_QUESTION"; label: string; payload: FollowUpQuestionPayload }
@@ -219,6 +242,20 @@ export interface ThoughtPayload {
   relatedPeopleIds?: string[];
   relatedProjectId?: string | null;
   source: "CAPTURE" | "MANUAL" | "VOICE";
+}
+
+export interface ExpressionRewritePayload {
+  rawText: string;
+  articulatedText: string;
+  improvedText: string;
+  explanation?: string | null;
+  vocabularySuggestions?: VocabularySuggestion[];
+  ambiguityNotes?: string[];
+  clarificationQuestion?: string | null;
+}
+
+export interface ExpressionTrendPayload extends ExpressionScoreTrend {
+  notes?: string | null;
 }
 
 export type GrowthCategory =
@@ -543,6 +580,8 @@ export interface ExecutionResult {
   thoughtUnitsCreated: number;
   activityLogsCreated: number;
   thoughtsSaved: number;
+  expressionRewritesSaved: number;
+  expressionTrendsSaved: number;
   growthItemsCreated: number;
   learningItemsCreated: number;
   questionsCreated: number;

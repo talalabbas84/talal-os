@@ -27,6 +27,8 @@ model User {
   followUpQuestions FollowUpQuestion[]
   thoughts          Thought[]
   thoughtUnits      ThoughtUnit[]
+  expressionRewrites ExpressionRewrite[]
+  expressionTrends  ExpressionTrend[]
   learningItems     LearningItem[]
   reviewSessions    ReviewSession[]
   activityLogs      ActivityLog[]
@@ -276,6 +278,40 @@ model ThoughtUnit {
 
   @@index([userId])
   @@index([type])
+  @@index([createdAt])
+}
+
+model ExpressionRewrite {
+  id                    String   @id @default(cuid())
+  rawText               String
+  articulatedText       String
+  improvedText          String
+  explanation           String?
+  vocabularySuggestions Json?
+  ambiguityNotes        Json?
+  clarificationQuestion String?
+  createdAt             DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ExpressionTrend {
+  id                String   @id @default(cuid())
+  clarity           String
+  specificity       String
+  vocabularyVariety String
+  structure         String
+  notes             String?
+  createdAt         DateTime @default(now())
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
   @@index([createdAt])
 }
 

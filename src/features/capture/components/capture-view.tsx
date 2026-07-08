@@ -508,17 +508,83 @@ function ArticulationPanel({
 
         <div>
           <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
-            Understood As
+            AI Understanding
           </p>
           <p className="rounded-lg bg-neutral-50 px-3 py-2 text-sm font-medium leading-relaxed text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50">
             {articulation.articulated}
           </p>
         </div>
+
+        <div>
+          <p className="mb-1 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Improved Articulation
+          </p>
+          <p className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-sm font-medium leading-relaxed text-blue-950 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-100">
+            {articulation.improvedArticulation}
+          </p>
+          {articulation.explanation && (
+            <p className="mt-1 text-xs leading-5 text-neutral-500 dark:text-neutral-400">
+              {articulation.explanation}
+            </p>
+          )}
+        </div>
+      </div>
+
+      {articulation.vocabularySuggestions.length > 0 && (
+        <div className="rounded-lg bg-neutral-50 p-3 dark:bg-neutral-950">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-neutral-400">
+            Vocabulary Suggestions
+          </p>
+          <div className="space-y-2">
+            {articulation.vocabularySuggestions.map((item) => (
+              <div key={item.original} className="text-xs leading-5 text-neutral-600 dark:text-neutral-300">
+                <span className="font-medium text-neutral-900 dark:text-neutral-50">{item.original}</span>
+                {" → "}
+                <span>{item.suggestions.join(", ")}</span>
+                {item.reason && <p className="text-neutral-400">{item.reason}</p>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {(articulation.ambiguityNotes.length > 0 || articulation.clarificationQuestion) && (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+          <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-amber-700 dark:text-amber-300">
+            Clarification
+          </p>
+          {articulation.ambiguityNotes.map((note) => (
+            <p key={note} className="text-xs leading-5 text-amber-800 dark:text-amber-200">
+              {note}
+            </p>
+          ))}
+          {articulation.clarificationQuestion && (
+            <p className="mt-2 text-sm font-medium leading-6 text-amber-950 dark:text-amber-100">
+              {articulation.clarificationQuestion}
+            </p>
+          )}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+        <ExpressionSignal label="Clarity" value={articulation.expressionScore.clarity} />
+        <ExpressionSignal label="Specificity" value={articulation.expressionScore.specificity} />
+        <ExpressionSignal label="Vocabulary" value={articulation.expressionScore.vocabularyVariety} />
+        <ExpressionSignal label="Structure" value={articulation.expressionScore.structure} />
       </div>
 
       {articulation.notes && (
         <p className="text-xs text-neutral-400">{articulation.notes}</p>
       )}
+    </div>
+  );
+}
+
+function ExpressionSignal({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg bg-neutral-50 px-3 py-2 dark:bg-neutral-950">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-neutral-400">{label}</p>
+      <p className="mt-0.5 text-xs leading-5 text-neutral-600 dark:text-neutral-300">{value}</p>
     </div>
   );
 }
@@ -665,16 +731,17 @@ function UpdatePreview({
   actionInclusion: ActionInclusion;
   onToggleAction: (i: number) => void;
 }) {
-  const executableCount = actions.filter((action) => action.type !== "NO_ACTION").length;
+  const visibleActions = actions
+    .map((action, index) => ({ action, index }))
+    .filter(({ action }) => isVisibleAction(action));
+  const executableCount = visibleActions.length;
 
   return (
     <Section icon={Zap} title="Actions to Execute" count={executableCount} note="Matches existing tasks/habits">
-      {actions.map((action, i) => (
-        action.type !== "NO_ACTION" && (
-          <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
-            <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
-          </ItemRow>
-        )
+      {visibleActions.map(({ action, index }) => (
+        <ItemRow key={action.id} included={!!actionInclusion[index]} onToggle={() => onToggleAction(index)} confidence="high" alwaysShowToggle>
+          <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
+        </ItemRow>
       ))}
     </Section>
   );
@@ -733,10 +800,10 @@ function DecisionPreview({
       </div>
 
       {/* Suggested actions */}
-      {actions.some((a) => a.type !== "NO_ACTION") && (
+      {actions.some(isVisibleAction) && (
         <Section icon={Zap} title="Suggested Actions" note="Apply to your state">
           {actions.map((action, i) => (
-            action.type !== "NO_ACTION" && (
+            isVisibleAction(action) && (
               <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
                 <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
               </ItemRow>
@@ -781,7 +848,7 @@ function ReflectionPreview({
         </Section>
       )}
 
-      {actions.filter((a) => a.type !== "NO_ACTION" && a.type !== "UPDATE_JOURNAL").map((action) => (
+      {actions.filter((a) => isVisibleAction(a) && a.type !== "UPDATE_JOURNAL").map((action) => (
         <div key={action.id} className="rounded-xl border border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-900">
           <ItemRow included={!!actionInclusion[actions.indexOf(action)]} onToggle={() => onToggleAction(actions.indexOf(action))} confidence="high" alwaysShowToggle>
             <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
@@ -804,6 +871,12 @@ function QuestionPreview({ answer }: { answer: string }) {
       <p className="text-sm leading-relaxed text-neutral-700 dark:text-neutral-300">{answer}</p>
     </div>
   );
+}
+
+function isVisibleAction(action: PlannedAction): boolean {
+  return action.type !== "NO_ACTION" &&
+    action.type !== "CREATE_EXPRESSION_REWRITE" &&
+    action.type !== "CREATE_EXPRESSION_TREND";
 }
 
 // ── PLAN preview ──────────────────────────────────────────────────────────────
@@ -856,10 +929,10 @@ function PlanPreview({
         )}
       </div>
 
-      {actions.some((a) => a.type !== "NO_ACTION") && (
+      {actions.some(isVisibleAction) && (
         <Section icon={Zap} title="Apply to State">
           {actions.map((action, i) => (
-            action.type !== "NO_ACTION" && (
+            isVisibleAction(action) && (
               <ItemRow key={action.id} included={!!actionInclusion[i]} onToggle={() => onToggleAction(i)} confidence="high" alwaysShowToggle>
                 <p className="text-sm font-medium text-neutral-900 dark:text-neutral-50">{action.label}</p>
               </ItemRow>
@@ -919,6 +992,8 @@ function SavedView({
     result.thoughtUnitsCreated > 0 && `${result.thoughtUnitsCreated} thought unit${result.thoughtUnitsCreated !== 1 ? "s" : ""} routed`,
     result.activityLogsCreated > 0 && `${result.activityLogsCreated} activity log${result.activityLogsCreated !== 1 ? "s" : ""} created`,
     result.thoughtsSaved > 0 && `${result.thoughtsSaved} thought${result.thoughtsSaved !== 1 ? "s" : ""} saved`,
+    result.expressionRewritesSaved > 0 && `${result.expressionRewritesSaved} expression rewrite${result.expressionRewritesSaved !== 1 ? "s" : ""} saved`,
+    result.expressionTrendsSaved > 0 && `${result.expressionTrendsSaved} expression trend${result.expressionTrendsSaved !== 1 ? "s" : ""} tracked`,
     result.growthItemsCreated > 0 && `${result.growthItemsCreated} growth item${result.growthItemsCreated !== 1 ? "s" : ""} created`,
     result.learningItemsCreated > 0 && `${result.learningItemsCreated} learning item${result.learningItemsCreated !== 1 ? "s" : ""} created`,
     result.questionsCreated > 0 && `${result.questionsCreated} question${result.questionsCreated !== 1 ? "s" : ""} queued`,

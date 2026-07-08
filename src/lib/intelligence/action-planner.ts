@@ -15,6 +15,7 @@ import type {
   Recommendation,
   ReflectionData,
   PlanSummary,
+  ArticulationResult,
 } from "./types";
 import type {
   CaptureResult,
@@ -138,6 +139,36 @@ export function planFromCapture(
 
 export function planFromCommands(commands: CommandOutput[]): PlannedAction[] {
   return commands.flatMap(planFromCommand);
+}
+
+export function planFromExpressionCoach(articulation: ArticulationResult): PlannedAction[] {
+  if (!articulation.original.trim() || !articulation.improvedArticulation.trim()) return [];
+
+  return [
+    {
+      id: nextId("expr"),
+      type: "CREATE_EXPRESSION_REWRITE",
+      label: "Store expression rewrite",
+      payload: {
+        rawText: articulation.original,
+        articulatedText: articulation.articulated,
+        improvedText: articulation.improvedArticulation,
+        explanation: articulation.explanation,
+        vocabularySuggestions: articulation.vocabularySuggestions,
+        ambiguityNotes: articulation.ambiguityNotes,
+        clarificationQuestion: articulation.clarificationQuestion,
+      },
+    },
+    {
+      id: nextId("expr-trend"),
+      type: "CREATE_EXPRESSION_TREND",
+      label: "Track expression trend",
+      payload: {
+        ...articulation.expressionScore,
+        notes: articulation.notes,
+      },
+    },
+  ];
 }
 
 function planFromCommand(cmd: CommandOutput): PlannedAction[] {

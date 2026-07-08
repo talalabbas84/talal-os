@@ -20,12 +20,14 @@ import {
   planFromMemoryCandidates,
   planFromDailyPlan,
   planFromSmartCaptureShortcut,
+  planFromExpressionCoach,
 } from "./action-planner";
 import { planGrowthFromCapture, planGrowthFromText } from "./growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "./thought-learning-engine";
 import { planFromThoughtUnits, splitThoughts } from "./thought-splitter";
 import { planPersonalIntelligenceActions } from "./personal-intelligence";
 import type { PipelineResult, IntentResult } from "./types";
+import type { CaptureResult } from "@/lib/ai/types";
 
 // processCapture: main entry — classifies intent then runs the right workflow.
 export async function processCapture(
@@ -35,15 +37,16 @@ export async function processCapture(
   const provider = getAIProvider();
   const thoughtUnits = splitThoughts(text);
   const thoughtUnitActions = planFromThoughtUnits(thoughtUnits);
-  const articulation = await articulateCapture(text);
+  const articulation = await articulateCapture(text, userId);
   const articulatedText = articulation.articulated;
+  const expressionActions = planFromExpressionCoach(articulation);
 
   const shortcutActions = isStandaloneSmartShortcut(articulatedText)
     ? planFromSmartCaptureShortcut(articulatedText)
     : [];
   if (shortcutActions.length > 0) {
     const growthActions = await planGrowthFromText(userId, articulatedText);
-    const baseActions = [...thoughtUnitActions, ...shortcutActions, ...growthActions];
+    const baseActions = [...expressionActions, ...thoughtUnitActions, ...shortcutActions, ...growthActions];
     const personalIntelligenceActions = await planPersonalIntelligenceActions({
       userId,
       rawText: articulation.original,
@@ -69,7 +72,7 @@ export async function processCapture(
   switch (intentResult.intent) {
     case "UPDATE": {
       // User is reporting completion or requesting changes to existing data
-      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
+      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       const commands = capture.data.commands;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       const thoughtLearningActions = planThoughtAndLearningFromCapture({
@@ -78,7 +81,7 @@ export async function processCapture(
         capture,
         skipThought: isDirectCommand(articulatedText, capture),
       });
-      const baseActions = [...thoughtUnitActions, ...planFromCommands(commands), ...thoughtLearningActions, ...growthActions];
+      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromCommands(commands), ...thoughtLearningActions, ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -98,7 +101,7 @@ export async function processCapture(
     case "DECISION": {
       const recommendation = await generateRecommendation(articulatedText, contextPrompt);
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...thoughtUnitActions, ...planFromRecommendation(recommendation), ...growthActions];
+      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromRecommendation(recommendation), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -128,7 +131,7 @@ export async function processCapture(
         memoryCandidates: reflectionData.memoryCandidates,
       };
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...thoughtUnitActions, ...planFromReflection(data), ...growthActions];
+      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromReflection(data), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -148,9 +151,11 @@ export async function processCapture(
       const answer = await provider.answerQuestion(articulatedText, contextPrompt);
       const growthActions = await planGrowthFromText(userId, articulatedText);
       const baseActions = growthActions.length > 0
-        ? [...thoughtUnitActions, ...growthActions]
+        ? [...expressionActions, ...thoughtUnitActions, ...growthActions]
         : thoughtUnitActions.length > 0
-          ? thoughtUnitActions
+          ? [...expressionActions, ...thoughtUnitActions]
+          : expressionActions.length > 0
+            ? expressionActions
           : [];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
@@ -173,7 +178,7 @@ export async function processCapture(
     case "PLAN": {
       const plan = await runPlanningEngine(userId);
       const growthActions = await planGrowthFromText(userId, articulatedText);
-      const baseActions = [...thoughtUnitActions, ...planFromDailyPlan(plan), ...growthActions];
+      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromDailyPlan(plan), ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -191,7 +196,7 @@ export async function processCapture(
 
     case "MEMORY": {
       // Pure memory extraction — no full organize
-      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
+      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       const candidates = capture.data.memoryCandidates;
       const growthActions = await planGrowthFromCapture(userId, articulatedText, capture);
       const thoughtLearningActions = planThoughtAndLearningFromCapture({
@@ -199,7 +204,7 @@ export async function processCapture(
         cleanedText: articulatedText,
         capture,
       });
-      const baseActions = [...thoughtUnitActions, ...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions];
+      const baseActions = [...expressionActions, ...thoughtUnitActions, ...planFromMemoryCandidates(candidates), ...thoughtLearningActions, ...growthActions];
       const personalIntelligenceActions = await planPersonalIntelligenceActions({
         userId,
         rawText: articulation.original,
@@ -220,7 +225,7 @@ export async function processCapture(
     case "UNKNOWN":
     default: {
       // Full organize flow — returns rich structured data for the capture-view
-      const capture = await provider.organizeCapture(articulatedText, contextPrompt);
+      const capture = sanitizeHabitSignals(await provider.organizeCapture(articulatedText, contextPrompt), articulation.original, articulatedText);
       // Default inclusion (all high/medium confidence included; projects opt-in; memories by importance)
       const d = capture.data;
       const defaultInclusion = {
@@ -245,6 +250,7 @@ export async function processCapture(
         skipThought: isDirectCommand(articulatedText, capture),
       });
       const baseActions = [
+        ...expressionActions,
         ...thoughtUnitActions,
         ...planFromCapture(capture, defaultInclusion, {}),
         ...thoughtLearningActions,
@@ -273,4 +279,35 @@ function isStandaloneSmartShortcut(text: string): boolean {
   const lower = text.trim().toLowerCase();
   if (lower.length > 90) return false;
   return /\b(i am done|i'm done|im done|finished it|i finished it|done with it|not today|tomorrow|skip|later|reschedule|move it)\b/.test(lower);
+}
+
+function sanitizeHabitSignals(capture: CaptureResult, rawText: string, articulatedText: string): CaptureResult {
+  const source = `${rawText}\n${articulatedText}`.toLowerCase();
+  const habits = capture.data.habits.filter((habit) => isExplicitHabitMention(source, habit.name));
+  const commands = capture.data.commands.filter((command) => {
+    if (command.type !== "COMPLETE_HABIT") return true;
+    return isExplicitHabitMention(source, command.target);
+  });
+
+  if (habits.length === capture.data.habits.length && commands.length === capture.data.commands.length) {
+    return capture;
+  }
+
+  return {
+    ...capture,
+    data: {
+      ...capture.data,
+      habits,
+      commands,
+    },
+  };
+}
+
+function isExplicitHabitMention(source: string, habitName: string): boolean {
+  const escapedHabit = habitName.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const completedBefore = new RegExp(`\\b(?:finished|completed|did|done with|went to|attended)\\s+(?:my\\s+|the\\s+)?${escapedHabit}\\b`, "i");
+  const completedAfter = new RegExp(`\\b${escapedHabit}\\s+(?:done|completed|finished)\\b`, "i");
+  const skipped = new RegExp(`\\b(?:skip|skipped|not today|missed|couldn'?t go to|didn'?t go to)\\b[^.\\n]*\\b${escapedHabit}\\b|\\b${escapedHabit}\\b[^.\\n]*\\b(?:skip|skipped|not today|missed)\\b`, "i");
+
+  return completedBefore.test(source) || completedAfter.test(source) || skipped.test(source);
 }

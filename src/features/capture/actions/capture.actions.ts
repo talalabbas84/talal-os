@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { processCapture as runPipeline } from "@/lib/intelligence/decision-engine";
 import { executeActions } from "@/lib/intelligence/execution-engine";
-import { planFromCapture } from "@/lib/intelligence/action-planner";
+import { planFromCapture, planFromExpressionCoach } from "@/lib/intelligence/action-planner";
 import { planGrowthFromCapture } from "@/lib/intelligence/growth-engine";
 import { isDirectCommand, planThoughtAndLearningFromCapture } from "@/lib/intelligence/thought-learning-engine";
 import { planFromThoughtUnits, splitThoughts } from "@/lib/intelligence/thought-splitter";
@@ -90,6 +90,7 @@ export async function saveCreateCapture(
       skipThought: isDirectCommand(input.capture.articulation.articulated, input.capture.capture),
     });
     const baseActions = [
+      ...planFromExpressionCoach(input.capture.articulation),
       ...thoughtUnitActions,
       ...planFromCapture(input.capture.capture, input.inclusion, input.memoryEdits),
       ...thoughtLearningActions,
