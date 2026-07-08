@@ -6,7 +6,16 @@ import { Sparkles, FileText, Loader2 } from "lucide-react";
 import { saveDraft } from "@/features/capture/actions/draft.actions";
 import { cn } from "@/utils/cn";
 
-export function HomeCapture() {
+const MODE_PLACEHOLDERS: Record<string, string> = {
+  focus: "Capture distracting thoughts here — keep them out of your head.",
+  preparation: "Any last thoughts before you go?",
+  reflection: "How did today go? What's on your mind?",
+  recovery: "How are you feeling? What do you need?",
+  morning: "What do you want to accomplish today?",
+};
+
+export function HomeCapture({ mode }: { mode?: string }) {
+  const placeholder = (mode && MODE_PLACEHOLDERS[mode]) ?? "What's on your mind?";
   const router = useRouter();
   const [text, setText] = useState("");
   const [isSaving, startSaving] = useTransition();
@@ -36,7 +45,7 @@ export function HomeCapture() {
         onKeyDown={(e) => {
           if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && hasText) handleOrganize();
         }}
-        placeholder="What's on your mind?"
+        placeholder={placeholder}
         rows={5}
         className="w-full resize-none rounded-2xl border border-neutral-200 bg-white px-4 py-3.5 text-base leading-relaxed text-neutral-900 placeholder-neutral-300 outline-none transition-colors focus:border-neutral-400 dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-50 dark:placeholder-neutral-600 dark:focus:border-neutral-500"
       />
