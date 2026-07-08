@@ -19,8 +19,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { GenerateTodayButton } from "@/features/dashboard/components/generate-today-button";
 import { DashboardTopTasks } from "@/features/dashboard/components/dashboard-top-tasks";
+import { TodaysConversationCard } from "@/features/conversation/components/todays-conversation-card";
 import { auth } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { getOrCreateTodaysConversation } from "@/lib/conversation";
 import { buildDailyPlan } from "@/lib/planning/daily-plan";
 
 export default async function DashboardPage() {
@@ -29,6 +31,8 @@ export default async function DashboardPage() {
 
   const plan = await buildDailyPlan(session.user.id);
   const personalIntelligence = await getPersonalIntelligenceSummary(session.user.id);
+  const todaysConversation = await getOrCreateTodaysConversation(session.user.id);
+  const conversationStats = await getConversationStats(session.user.id);
   const firstName = session.user.name?.split(" ")[0] ?? "Talal";
   const showReflectionReminder = !plan.journalFilled && getHourInTimeZone("America/Toronto") >= 20;
   const nextAction = plan.topTasks[0]?.title ?? plan.habitsDue[0]?.name ?? "Capture what is on your mind.";
@@ -65,6 +69,18 @@ export default async function DashboardPage() {
       </section>
 
       {showReflectionReminder && <ReflectionReminder />}
+
+      <TodaysConversationCard
+        conversation={todaysConversation ? {
+          id: todaysConversation.id,
+          mode: todaysConversation.mode,
+          slot: todaysConversation.slot,
+          prompt: todaysConversation.prompt,
+          contextNote: todaysConversation.contextNote,
+        } : null}
+        totalXp={conversationStats.totalXp}
+        streak={conversationStats.streak}
+      />
 
       <PersonalIntelligencePanel summary={personalIntelligence} todayFocus={plan.todayMission} />
 
@@ -386,6 +402,24 @@ async function getPersonalIntelligenceSummary(userId: string) {
     upcomingReviews: `${reviewCount} due`,
     currentChallenge: growthArea?.currentChallenge ?? "No current challenge captured yet.",
     todayRecommendation: growthArea?.nextRecommendation ?? "Capture the next raw thought before trying to organize it.",
+  };
+}
+
+async function getConversationStats(userId: string) {
+  const [xp, streak] = await Promise.all([
+    prisma.discoveryXp.aggregate({
+      where: { userId },
+      _sum: { xp: true },
+    }),
+    prisma.companionStreak.findUnique({
+      where: { userId_type: { userId, type: "MEANINGFUL_CONVERSATION" } },
+      select: { currentCount: true },
+    }),
+  ]);
+
+  return {
+    totalXp: xp._sum.xp ?? 0,
+    streak: streak?.currentCount ?? 0,
   };
 }
 

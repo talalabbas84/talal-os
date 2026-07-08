@@ -29,6 +29,10 @@ model User {
   thoughtUnits      ThoughtUnit[]
   expressionRewrites ExpressionRewrite[]
   expressionTrends  ExpressionTrend[]
+  conversations      Conversation[]
+  conversationAnswers ConversationAnswer[]
+  discoveryXp        DiscoveryXp[]
+  companionStreaks   CompanionStreak[]
   learningItems     LearningItem[]
   reviewSessions    ReviewSession[]
   activityLogs      ActivityLog[]
@@ -313,6 +317,82 @@ model ExpressionTrend {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model Conversation {
+  id            String             @id @default(cuid())
+  mode          ConversationMode
+  slot          ConversationSlot
+  prompt        String
+  contextNote   String?
+  status        ConversationStatus @default(PENDING)
+  depth         Int                @default(1)
+  followUpCount Int                @default(0)
+  source        Json?
+  scheduledFor  DateTime?
+  answeredAt    DateTime?
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  userId  String
+  user    User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  answers ConversationAnswer[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([slot])
+  @@index([mode])
+  @@index([createdAt])
+}
+
+model ConversationAnswer {
+  id             String              @id @default(cuid())
+  answer         String
+  feedback       String?
+  insight        String?
+  xpCategory     DiscoveryXpCategory
+  xpAmount       Int                 @default(0)
+  meaningful     Boolean             @default(false)
+  createdAt      DateTime            @default(now())
+
+  conversationId String
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([conversationId])
+  @@index([xpCategory])
+  @@index([createdAt])
+}
+
+model DiscoveryXp {
+  id        String              @id @default(cuid())
+  category  DiscoveryXpCategory
+  xp        Int                 @default(0)
+  updatedAt DateTime            @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, category])
+  @@index([userId])
+}
+
+model CompanionStreak {
+  id               String              @id @default(cuid())
+  type             CompanionStreakType
+  currentCount     Int                 @default(0)
+  bestCount        Int                 @default(0)
+  lastActivityDate DateTime?           @db.Date
+  updatedAt        DateTime            @updatedAt
+
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, type])
+  @@index([userId])
 }
 
 model LearningItem {
@@ -891,6 +971,52 @@ enum DayPulseStatus {
   PENDING
   ANSWERED
   SKIPPED
+}
+
+enum ConversationMode {
+  REFLECTION
+  SELF_DISCOVERY
+  EMOTIONAL_INTELLIGENCE
+  LEARNING
+  DANCE
+  RELATIONSHIPS
+  HEALTH
+  CAREER
+  INTENTIONAL_LIVING
+  PLANNING
+  CHECK_IN
+}
+
+enum ConversationSlot {
+  MORNING
+  AFTERNOON
+  EVENING
+  AD_HOC
+}
+
+enum ConversationStatus {
+  PENDING
+  ANSWERED
+  SKIPPED
+}
+
+enum DiscoveryXpCategory {
+  COMMUNICATION
+  SELF_AWARENESS
+  EMOTIONAL_MATURITY
+  HEALTH
+  RELATIONSHIPS
+  CAREER
+  DANCE
+  LEADERSHIP
+  LEARNING
+}
+
+enum CompanionStreakType {
+  DAILY_REFLECTION
+  MEANINGFUL_CONVERSATION
+  COMPLETED_FOLLOW_UP
+  INTENTIONAL_LIVING
 }
 
 enum PersonalInsightCategory {
