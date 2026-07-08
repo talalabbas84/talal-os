@@ -30,6 +30,8 @@ import { enrichCaptureRouting } from "./capture-routing-enricher";
 import { detectClarification } from "./clarification-engine";
 import { detectHealthCapture, isHealthObservationTask } from "./health-state-detector";
 import { planFromHealthState } from "./action-planner";
+import { detectNeeds } from "@/lib/needs/need-detector";
+import { generateNeedResponse } from "@/lib/needs/need-response";
 import type { PipelineResult, IntentResult } from "./types";
 import type { CaptureResult } from "@/lib/ai/types";
 
@@ -57,8 +59,11 @@ export async function processCapture(
       cleanedText: articulatedText,
       existingActions: baseActions,
     });
+    const shortcutNeeds = detectNeeds(articulatedText, "UPDATE");
     return {
       articulation,
+      companionResponse: generateNeedResponse(shortcutNeeds.primaryNeed, shortcutNeeds.secondaryNeeds) ?? undefined,
+      detectedNeeds: [shortcutNeeds.primaryNeed, ...shortcutNeeds.secondaryNeeds],
       intent: "UPDATE",
       intentResult: { intent: "UPDATE", confidence: "high", reason: "Smart capture shortcut detected." },
       commands: [],
@@ -78,10 +83,15 @@ export async function processCapture(
     }
   }
 
-  // 2. Build full user context (needed by most workflows)
+  // 2. Detect underlying human need — runs after intent is settled (including health override)
+  const needDetection = detectNeeds(articulatedText || text, intentResult.intent);
+  const companionResponse = generateNeedResponse(needDetection.primaryNeed, needDetection.secondaryNeeds) ?? undefined;
+  const detectedNeeds = [needDetection.primaryNeed, ...needDetection.secondaryNeeds];
+
+  // 3. Build full user context (needed by most workflows)
   const { prompt: contextPrompt } = await buildUserContext(userId);
 
-  // 3. Route to the appropriate workflow
+  // 4. Route to the appropriate workflow
   switch (intentResult.intent) {
     case "UPDATE": {
       // User is reporting completion or requesting changes to existing data
@@ -104,6 +114,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "UPDATE",
         intentResult,
         commands,
@@ -123,6 +135,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "DECISION",
         intentResult,
         recommendation,
@@ -153,6 +167,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: intentResult.intent as "REFLECTION" | "JOURNAL",
         intentResult,
         reflectionData: data,
@@ -179,6 +195,8 @@ export async function processCapture(
       const actions = [...baseActions, ...personalIntelligenceActions];
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "QUESTION",
         intentResult,
         answer,
@@ -200,6 +218,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "PLAN",
         intentResult,
         plan,
@@ -227,6 +247,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "MEMORY",
         intentResult,
         candidates,
@@ -251,6 +273,8 @@ export async function processCapture(
       });
       return {
         articulation,
+        companionResponse,
+        detectedNeeds,
         intent: "HEALTH",
         intentResult,
         actions: [...understandingActions, ...thoughtUnitHealthActions, ...healthActions, ...personalIntelligenceActions],
@@ -308,6 +332,8 @@ export async function processCapture(
       return {
         articulation,
         clarification,
+        companionResponse,
+        detectedNeeds,
         intent: intentResult.intent as "CREATE" | "UNKNOWN",
         intentResult,
         capture,

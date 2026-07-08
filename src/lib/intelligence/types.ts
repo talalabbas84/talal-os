@@ -550,6 +550,8 @@ export interface ClarificationRequest {
 type PipelineBase = {
   articulation: ArticulationResult;
   clarification?: ClarificationRequest;
+  companionResponse?: string;
+  detectedNeeds?: string[];
 };
 
 export type PipelineResult = PipelineBase &

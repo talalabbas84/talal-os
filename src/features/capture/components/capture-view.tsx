@@ -434,6 +434,12 @@ function PreviewView({
         />
       )}
 
+      {result.companionResponse && (
+        <p className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3 text-sm leading-relaxed text-neutral-500 dark:border-neutral-800 dark:bg-neutral-900/60 dark:text-neutral-400">
+          {result.companionResponse}
+        </p>
+      )}
+
       <PreviewBlock title="I understood">
         <UnderstandingText result={result} />
       </PreviewBlock>
